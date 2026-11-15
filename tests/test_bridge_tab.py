@@ -106,3 +106,16 @@ def test_bridge_hello_names_the_tab_page(world):
     assert posted[-1]["result"]["tab"] == {"url": "http://127.0.0.1:47390/tab"}
     Bridge(world.service, posted.append).handle({"type": "takumion-link", "id": 2, "method": "hello"})
     assert "tab" not in posted[-1]["result"]
+
+
+def test_refresh_pushes_only_when_the_view_changes(world, tmp_path):
+    tab, _, _, posted, _ = make_tab(world, tmp_path)
+    tab.handle({"type": "tab", "action": "refresh"})
+    world.plate.refresh([], "", "PageMessage")
+    world.plate.refresh([], "", "PageMessage")
+    assert len(posted) <= 1, "an unchanged plate pushes nothing"
+    base = len(posted)
+    world.orca.objects = []
+    from link.plate import PlateObject
+    world.plate.refresh([PlateObject(1, "x", "/elsewhere.stl", (1.0, 1.0))], "", "PageMessage")
+    assert len(posted) == base, "objects that are not linked do not change the view"

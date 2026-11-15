@@ -1,6 +1,8 @@
 """The plugin's Orca tab: what it shows (``state``) and what its buttons do.
 
-Page → plugin: ``{"type": "tab", "action": …}``.
+Page → plugin: ``{"type": "tab", "action": …}``. ``refresh`` comes every few
+seconds while the tab is visible: Orca's *Reload from disk* fires no event, so
+the page's own message is the UI-thread moment that re-reads the plate.
 Plugin → page: ``{"type": "tab-state", "state": {…}}``, pushed after every change."""
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ class TabController:
         self._notice = ""
         self._actions: dict[str, Callable[[dict[str, Any]], None]] = {
             "ready": lambda msg: None,
+            "refresh": lambda msg: None,
             "pair": lambda msg: self._pairing.start_code(),
             "cancel-pair": lambda msg: self._pairing.cancel_code(),
             "revoke": lambda msg: self._pairing.revoke_id(str(msg.get("id", ""))),
@@ -54,7 +57,8 @@ class TabController:
             self._log(f"tab: unknown action {message.get('action')!r}")
             return
         action(message)
-        self.push()
+        if message.get("action") != "refresh":
+            self.push()
 
     def _open(self, message: dict[str, Any]) -> None:
         try:

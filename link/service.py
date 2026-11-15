@@ -61,6 +61,7 @@ class LinkService:
         self._setup = state.get("loadGeometryOnly", "unknown") if isinstance(state, dict) else "unknown"
         self._card_dismissed = bool(state.get("setupCardDismissed")) if isinstance(state, dict) else False
         self._listeners: list[Callable[[], None]] = []
+        self._last_view: list[dict[str, Any]] | None = None
         plate.subscribe(self._on_plate)
 
     # ---------------------------------------------------------------- state
@@ -231,7 +232,10 @@ class LinkService:
             seen = self.plate.find(link.path)
             if seen is not None and seen.mesh_sig != link.mesh_sig:
                 self.store.update(link, reload_needed=False, mesh_sig=seen.mesh_sig)
-        self._changed()
+        view = self.docs()
+        if view != self._last_view:
+            self._last_view = view
+            self._changed()
 
     def _guard_project(self, event: str) -> None:
         project = self.plate.project_path
