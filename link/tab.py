@@ -1,8 +1,8 @@
 """The plugin's Orca tab: what it shows (``state``) and what its buttons do.
 
-Page → plugin: ``{"type": "tab", "action": …}``. ``refresh`` comes every few
-seconds while the tab is visible: Orca's *Reload from disk* fires no event, so
-the page's own message is the UI-thread moment that re-reads the plate.
+Page → plugin: ``{"type": "tab", "action": …}``. ``refresh`` comes every 3 s
+from the page: Orca's *Reload from disk* fires no event, so the page's own
+message is the UI-thread moment that re-reads the plate.
 Plugin → page: ``{"type": "tab-state", "state": {…}}``, pushed after every change."""
 
 from __future__ import annotations

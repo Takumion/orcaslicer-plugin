@@ -111,7 +111,8 @@
   $("open-desktop").addEventListener("click", () => post("open-takumion", {target: "desktop"}));
   $("open-web").addEventListener("click", () => post("open-takumion", {target: "web"}));
   // Orca's Reload from disk fires no plugin event; this lets the plugin
-  // re-read the plate on Orca's UI thread while the tab is in view.
-  setInterval(() => { if (document.visibilityState === "visible") post("refresh"); }, 3000);
+  // re-read the plate on Orca's UI thread. No visibility check: Orca's
+  // webview reports the tab as hidden even while it is shown.
+  setInterval(() => post("refresh"), 3000);
   post("ready");
 })();
