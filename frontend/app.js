@@ -83,14 +83,17 @@
     const box = $("docs");
     box.replaceChildren();
     $("docs-empty").hidden = docs.length > 0;
-    for (const doc of docs) {
+    // Two documents may share a name ("Untitled Project"): tell them apart by key.
+    const named = docs.map((doc) => doc.doc.name || doc.key);
+    const shared = (name) => named.filter((n) => n === name).length > 1;
+    docs.forEach((doc, i) => {
       const section = el("div", "doc");
-      section.append(el("h3", "", doc.doc.name || doc.key));
+      section.append(el("h3", "", shared(named[i]) ? `${named[i]} · ${doc.key.slice(0, 8)}` : named[i]));
       const list = el("ul", "rows");
       doc.bodies.forEach((body) => list.append(bodyRow(body)));
       section.append(list);
       box.append(section);
-    }
+    });
   }
 
   // A local Takumion dev server answers on its port: offer it "in this tab" too.
