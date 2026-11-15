@@ -20,6 +20,10 @@
     return node;
   }
 
+  function hostOf(url) {
+    try { return new URL(url).host; } catch (e) { return url || ""; }
+  }
+
   function when(iso) {
     const date = new Date(iso);
     return isNaN(date) ? iso : date.toLocaleString();
@@ -108,6 +112,7 @@
   function render(state) {
     latest = state;
     probeDev(state.takumionDev);
+    $("open-here").textContent = `In this tab (${hostOf(state.takumionHere)})`;
     renderStatus(state);
     renderCode(state.code);
     renderPairings(state.pairings || []);
