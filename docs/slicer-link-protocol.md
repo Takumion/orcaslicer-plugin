@@ -44,7 +44,11 @@ The desktop app may then start Orca (no file argument) and probe again for up to
   pairing from the Orca tab.
 - **CORS.** `hello` and `pair` answer any origin (they reveal nothing and need a
   code). Every other endpoint echoes `Access-Control-Allow-Origin` only for a
-  paired origin. Preflights carrying `Access-Control-Request-Private-Network`
+  paired origin — except an **error reply**, which always echoes the request's
+  origin: a refusal (`401` after the user revoked the pairing in Orca, `400`,
+  `413`, `421`) reveals nothing, and without the header the browser hides it
+  behind an opaque network error, so the client could not tell "pair again" from
+  "connection lost". Preflights carrying `Access-Control-Request-Private-Network`
   are answered with `Access-Control-Allow-Private-Network: true` (Chrome's
   private/local network access).
 - **Limits.** Request body ≤ 384 MB (`413` above). Keys are

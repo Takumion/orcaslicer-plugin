@@ -123,11 +123,16 @@ class _LinkHandler(BaseHTTPRequestHandler):
         port = self.link.port
         return self.headers.get("Host", "") in {f"127.0.0.1:{port}", f"localhost:{port}"}
 
-    def _cors_origin(self) -> str | None:
+    def _cors_origin(self, status: int = 200) -> str | None:
+        """The origin to echo: any origin for ``hello`` / ``pair``, for a
+        preflight and for an error reply (a refusal reveals nothing, and the
+        client must be able to read "pair again"); a paired origin otherwise."""
         origin = self._origin
-        if origin and (self._route in _OPEN_PATHS or self.link.pairing.is_paired_origin(origin)):
+        if not origin:
+            return None
+        if self._route in _OPEN_PATHS or status >= 400 or self.command == "OPTIONS":
             return origin
-        return None
+        return origin if self.link.pairing.is_paired_origin(origin) else None
 
     def _token(self) -> str | None:
         auth = self.headers.get("Authorization", "")
@@ -139,7 +144,7 @@ class _LinkHandler(BaseHTTPRequestHandler):
     def _reply(self, status: int, body: Any | None = None, extra: dict[str, str] | None = None) -> None:
         data = b"" if body is None else json.dumps(body).encode("utf-8")
         self.send_response(status)
-        allow = self._cors_origin()
+        allow = self._cors_origin(status)
         if allow:
             self.send_header("Access-Control-Allow-Origin", allow)
         self.send_header("Vary", "Origin")

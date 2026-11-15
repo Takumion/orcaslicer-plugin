@@ -83,7 +83,18 @@ def test_pairing_and_origin_binding(served):
     assert request(server, "GET", "/v1/hello", headers=auth(token, "https://evil.example"))[2]["paired"] is False
     status, headers, body = request(server, "GET", "/v1/links?doc=prj_1", headers=auth(token, "https://evil.example"))
     assert status == 401 and body["error"]["code"] == "unauthorized"
-    assert "Access-Control-Allow-Origin" not in headers
+    assert headers["Access-Control-Allow-Origin"] == "https://evil.example", "errors are readable by any origin"
+
+
+def test_success_replies_only_reach_paired_origins(served):
+    server, pairing = served
+    token = pair(server, pairing)
+    status, headers, _ = request(server, "GET", "/v1/links?doc=prj_1", headers=auth(token))
+    assert status == 200 and headers["Access-Control-Allow-Origin"] == ORIGIN
+    pairing.revoke_token(token)
+    status, headers, body = request(server, "GET", "/v1/links?doc=prj_1", headers=auth(token))
+    assert status == 401 and body["error"]["code"] == "unauthorized"
+    assert headers["Access-Control-Allow-Origin"] == ORIGIN, "a revoked browser can read that it must pair again"
 
 
 def test_send_and_links_round_trip(served):
@@ -122,10 +133,8 @@ def test_preflight(served):
     assert headers["Access-Control-Allow-Private-Network"] == "true"
     assert "Authorization" in headers["Access-Control-Allow-Headers"]
     status, headers, _ = request(server, "OPTIONS", "/v1/send", headers=pna)
-    assert "Access-Control-Allow-Origin" not in headers, "send is closed to an unpaired origin"
-    pair(server, pairing)
-    status, headers, _ = request(server, "OPTIONS", "/v1/send", headers=pna)
-    assert headers["Access-Control-Allow-Origin"] == ORIGIN
+    assert headers["Access-Control-Allow-Origin"] == ORIGIN, "an unpaired origin may ask, so it can read the 401"
+    assert headers["Access-Control-Allow-Private-Network"] == "true"
 
 
 def test_bad_bodies(served):
