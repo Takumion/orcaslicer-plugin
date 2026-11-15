@@ -22,8 +22,8 @@ def open_url(url: str) -> None:
         os.startfile(url)  # type: ignore[attr-defined]  # noqa: S606 - fixed URL
         return
     opener = "open" if sys.platform == "darwin" else "xdg-open"
-    subprocess.Popen([opener, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,  # noqa: S603
-                     stderr=subprocess.DEVNULL, start_new_session=True)
+    # No stdio redirection: opening /dev/null is a file access Orca's sandbox asks about.
+    subprocess.Popen([opener, url], start_new_session=True)  # noqa: S603 - fixed argv
 
 
 class Launcher:

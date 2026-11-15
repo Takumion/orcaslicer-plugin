@@ -48,7 +48,12 @@ The desktop app may then start Orca (no file argument) and probe again for up to
   origin: a refusal (`401` after the user revoked the pairing in Orca, `400`,
   `413`, `421`) reveals nothing, and without the header the browser hides it
   behind an opaque network error, so the client could not tell "pair again" from
-  "connection lost". Preflights carrying `Access-Control-Request-Private-Network`
+  "connection lost". **Preflights** (`OPTIONS`) are answered for any origin, with
+  that origin, `Access-Control-Allow-Methods: GET, POST, DELETE` and
+  `Access-Control-Allow-Headers: Authorization, Content-Type`: they carry no data,
+  and the actual reply decides. Without that, a revoked origin's `send` (JSON with
+  `Authorization`, so always preflighted) never goes out and its `401` is never
+  seen. Preflights carrying `Access-Control-Request-Private-Network`
   are answered with `Access-Control-Allow-Private-Network: true` (Chrome's
   private/local network access).
 - **Limits.** Request body ≤ 384 MB (`413` above). Keys are

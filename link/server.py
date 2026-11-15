@@ -22,7 +22,7 @@ from .service import LinkService
 
 _OPEN_PATHS = frozenset({"/v1/hello", "/v1/pair"})
 _ALLOW_HEADERS = "Authorization, Content-Type"
-_ALLOW_METHODS = "GET, POST, DELETE, OPTIONS"
+_ALLOW_METHODS = "GET, POST, DELETE"
 
 
 class _LoopbackHTTPServer(ThreadingHTTPServer):
