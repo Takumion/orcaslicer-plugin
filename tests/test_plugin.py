@@ -67,9 +67,8 @@ def test_permissions_and_registration(plugin, monkeypatch):
     start_tab(orca, monkeypatch, data_dir)
     (asked,) = orca.calls["permissions"]
     assert asked["threading"] is True
-    sockets = asked["network_socket"]
-    assert sockets[:5] == [f"('127.0.0.1', {port})" for port in PORTS]
-    assert sockets[5].startswith("/") or sockets[5].startswith("\0")
+    assert asked["network_socket"] == [f"('127.0.0.1', {port})" for port in PORTS], \
+        "no socket path at load: Orca re-asks about paths on every start"
 
 
 def test_load_serve_refresh_unload(plugin, monkeypatch):

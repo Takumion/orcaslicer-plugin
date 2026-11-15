@@ -7,6 +7,7 @@ whose lock file is newest is preferred."""
 
 from __future__ import annotations
 
+import socket
 from pathlib import Path
 
 from .dbus import BusError, SessionBus, session_bus_address
@@ -40,3 +41,18 @@ def deliver(message: str, data_dir: Path, address: str | None = None) -> None:
             bus.flush()
     except BusError as exc:
         raise HandoffUnavailable(f"D-Bus: {exc}") from exc
+
+
+def touch_bus(address: str | None = None) -> None:
+    """Open and close the session-bus socket once, on Orca's UI thread.
+
+    Orca checks the grants a plugin asks for at load by host name, and a socket
+    path has none, so asking for the bus there prompts on every start. Touched
+    here instead, Orca asks inline the first time only and remembers the exact
+    path; the hand-off's later connects (worker threads) then match it."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(2)
+        sock.connect(address or session_bus_address())
+    finally:
+        sock.close()

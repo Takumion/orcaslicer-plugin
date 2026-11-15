@@ -163,3 +163,11 @@ def test_bus_address_from_environment():
     assert session_bus_address({"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/flatpak/bus"}) == "/run/flatpak/bus"
     assert session_bus_address({"DBUS_SESSION_BUS_ADDRESS": "unix:abstract=/tmp/dbus-x,guid=1"}) == "\0/tmp/dbus-x"
     assert session_bus_address({"DBUS_SESSION_BUS_ADDRESS": "unix:path=/a%20b"}) == "/a b"
+
+
+def test_touch_bus_connects_and_closes(bus, tmp_path):
+    from link.handoff_linux import touch_bus
+
+    touch_bus(bus[1])
+    with pytest.raises(OSError):
+        touch_bus(str(tmp_path / "no-such-bus"))

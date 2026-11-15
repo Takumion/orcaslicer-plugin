@@ -17,11 +17,12 @@ and plate files, and the hand-off that puts files on the plate. Protocol:
 ``docs/slicer-link-protocol.md``.
 """
 
+import sys
 import traceback
 from typing import Any
 
 from link.app import LinkApp
-from link.dbus import session_bus_address
+from link.handoff_linux import touch_bus
 from link.orca_host import OrcaNotifier, data_dir_for, event_name, orca_version, refresh_plate
 from link.page import render_page
 from link.protocol import LOOPBACK, PORTS
@@ -41,10 +42,9 @@ def log(message: str) -> None:
 
 def permissions() -> dict[str, Any]:
     """What the plugin asks for once, at load: the loopback ports it may
-    listen on, the session-bus socket for the Linux hand-off, and threads."""
-    sockets = [repr((LOOPBACK, port)) for port in PORTS]
-    sockets.append(session_bus_address())
-    return {"network_socket": sockets, "threading": True}
+    listen on, and threads. The Linux session bus is not asked for here (see
+    ``touch_bus``): Orca would ask about a socket path again on every start."""
+    return {"network_socket": [repr((LOOPBACK, port)) for port in PORTS], "threading": True}
 
 
 if orca is not None and hasattr(orca, "pages"):
@@ -53,6 +53,7 @@ if orca is not None and hasattr(orca, "pages"):
         """The "Takumion" tab: status, pairing, links, 3MF setup."""
 
         app: LinkApp | None = None
+        bus_touched = False
 
         def get_name(self) -> str:
             return TAB_NAME
@@ -93,12 +94,23 @@ if orca is not None and hasattr(orca, "pages"):
             """UI thread: copy the plate and Orca's version for the server thread."""
             if self.app is None:
                 return
+            self._touch_bus_once()
             try:
                 if self.app.service.orca_version == "unknown":
                     self.app.service.orca_version = orca_version(orca)
                 refresh_plate(orca, self.app.plate, event)
             except Exception:  # noqa: BLE001
                 log(f"plate refresh after {event} failed:\n" + traceback.format_exc())
+
+        def _touch_bus_once(self) -> None:
+            """UI thread, Linux: let Orca ask about the session bus inline, once."""
+            if self.bus_touched or not sys.platform.startswith("linux"):
+                return
+            self.bus_touched = True
+            try:
+                touch_bus()
+            except Exception as exc:  # noqa: BLE001 - a refusal shows up when a send needs the bus
+                log(f"session bus not reachable: {exc}")
 
     @orca.plugin
     class TakumionLink(orca.base):
