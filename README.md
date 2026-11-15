@@ -11,7 +11,7 @@ bodies sent from the Takumion CAD app on Orca's plate, and keeps them linked:
 
 The plugin adds a **Takumion** tab to Orca: link status, pairing, paired apps
 (with *Revoke*), linked bodies with a *Reload from disk* badge, a one-time
-3MF setup card, and *Open Takumion*.
+3MF setup card (shown when a 3MF did not land), and *Open Takumion*.
 
 It contains no Takumion code. Takumion talks to it over a small documented
 loopback protocol: [`docs/slicer-link-protocol.md`](docs/slicer-link-protocol.md).
@@ -33,17 +33,19 @@ loopback protocol: [`docs/slicer-link-protocol.md`](docs/slicer-link-protocol.md
 
 *Open Takumion* asks once more, the first time, to run the system's URL opener.
 
-### 3MF: set "Load geometry only" once
+### STL by default; 3MF needs one Orca setting
 
-With Orca's default load behaviour a 3MF either opens a "project or geometry"
+Takumion sends STL unless you pick 3MF. STL is always a plain import.
+
+For 3MF, set **Preferences › Load behavior → Load geometry only** once. With
+Orca's default load behaviour a 3MF either opens a "project or geometry"
 question or — on an empty plate — opens as the **project**, so a later *Save*
-would write the whole project into the linked file. Set
-**Preferences › Load behavior → Load geometry only** and every 3MF from
-Takumion is a plain import. The plugin cannot read that preference, so it
-watches instead: a 3MF that does not appear on the plate within 5 s, or that
-became the project, shows the setup card again (and Takumion shows the same
-hint). A link file opened as the project is dropped from the links; the next
-send writes a fresh file. STL never needs this.
+would write the whole project into the linked file. A plugin cannot read or
+change that preference, so the plugin watches instead: a 3MF that does not
+appear on the plate within 5 s, or that became the project, brings up the
+setup card in the Takumion tab (and Takumion shows the same hint). A link
+file opened as the project is dropped from the links; the next send writes a
+fresh file.
 
 ## How it works
 

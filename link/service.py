@@ -86,9 +86,10 @@ class LinkService:
         self._save_state()
 
     def setup(self) -> dict[str, Any]:
-        """What the tab's 3MF setup card needs."""
+        """What the tab's 3MF setup card needs. Takumion sends STL by default,
+        so the card appears only once a 3MF failed to land as plain geometry."""
         return {"loadGeometryOnly": self._setup,
-                "showCard": self._setup != "confirmed" and not self._card_dismissed}
+                "showCard": self._setup == "missing" and not self._card_dismissed}
 
     def dismiss_setup_card(self) -> None:
         """The user closed the setup card; it returns if a 3MF fails to land."""

@@ -6,6 +6,7 @@ from conftest import free_ports
 from link.bridge import Bridge
 from link.launcher import DESKTOP_URL, Launcher
 from link.pairing import PairingBook
+from link.protocol import parse_send
 from link.server import LinkServer
 from link.tab import TabController
 
@@ -73,7 +74,11 @@ def test_tab_state_shows_server_and_setup(world, tmp_path):
     try:
         state = tab.state()
         assert state["server"] == {"port": server.port, "error": None}
-        assert state["setup"] == {"loadGeometryOnly": "unknown", "showCard": True}
+        assert state["setup"] == {"loadGeometryOnly": "unknown", "showCard": False}, "no card before a 3MF fails"
+        world.orca.behaviour = "ignore"
+        world.service.send(parse_send({"doc": {"key": "p", "name": "P"}, "mode": "add", "format": "3mf",
+                                       "parts": [{"bodyKey": "b", "name": "B", "data": "AA=="}]}))
+        assert tab.state()["setup"]["showCard"] is True
         tab.handle({"type": "tab", "action": "dismiss-setup"})
         assert posted[-1]["state"]["setup"]["showCard"] is False
         tab.handle({"type": "tab", "action": "open-takumion", "target": "desktop"})
