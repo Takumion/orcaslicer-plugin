@@ -15,10 +15,11 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 WEB_URL = "https://app.takumion.com/"
 DESKTOP_URL = "takumion://open"
-# Takumion's local dev servers. The tab offers them in *Open Takumion › In
-# this tab* only when one answers (probed from the page, so the plugin itself
-# asks Orca for no extra network access).
-DEV_URLS = ("http://localhost:5174/", "http://localhost:5180/")
+# Plain http is accepted only for a Takumion served on this computer (a dev
+# server set in Orca's Config tab): anything else must be https.
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]", "::1"})
+# The fragment that carries the bridge key into the tab (never sent to a server).
+KEY_FRAGMENT = "orcaLinkKey"
 
 
 def open_url(url: str) -> None:
@@ -32,16 +33,24 @@ def open_url(url: str) -> None:
 
 
 def checked_web_url(url: object) -> str:
-    """``url`` when it is an http(s) URL with a host, else the default web app."""
+    """``url`` when it is an https URL with a host (or http on this computer),
+    else the default web app."""
     parts = urlsplit(url) if isinstance(url, str) else None
-    return url if parts and parts.scheme in ("http", "https") and parts.netloc else WEB_URL
+    if parts is None or not parts.netloc:
+        return WEB_URL
+    if parts.scheme == "https" or (parts.scheme == "http" and (parts.hostname or "") in _LOCAL_HOSTS):
+        return url  # type: ignore[return-value]  # checked str above
+    return WEB_URL
 
 
-def hosted_url(url: str) -> str:
-    """The web app as a page inside Orca's tab: ``url`` with ``host=orca``."""
+def hosted_url(url: str, key: str = "") -> str:
+    """The web app as a page inside Orca's tab: ``url`` with ``host=orca`` and,
+    when given, the bridge ``key`` in the fragment — fragments never reach a
+    server or a ``Referer``, so only the page the plugin opened learns it."""
     parts = urlsplit(url)
     query = [(k, v) for k, v in parse_qsl(parts.query) if k != "host"] + [("host", "orca")]
-    return urlunsplit(parts._replace(query=urlencode(query)))
+    fragment = f"{KEY_FRAGMENT}={key}" if key else ""
+    return urlunsplit(parts._replace(query=urlencode(query), fragment=fragment))
 
 
 class Launcher:
@@ -53,17 +62,9 @@ class Launcher:
         self.targets = {"web": self.web_url, "desktop": DESKTOP_URL}
         self._opener = opener
 
-    @property
-    def here_url(self) -> str:
-        """Where *Open Takumion here* navigates the tab."""
-        return hosted_url(self.web_url)
-
-    @property
-    def dev_targets(self) -> list[dict[str, str]]:
-        """Local dev servers the tab may offer next to the web app: ``probe``
-        is what the page checks, ``url`` where it then navigates."""
-        return [{"label": urlsplit(url).netloc, "probe": url, "url": hosted_url(url)}
-                for url in DEV_URLS if url.rstrip("/") != self.web_url.rstrip("/")]
+    def here_url(self, key: str = "") -> str:
+        """Where *Open Takumion › In this tab* navigates the tab, carrying the bridge ``key``."""
+        return hosted_url(self.web_url, key)
 
     def open(self, target: str) -> str:
         """Open ``"web"`` or ``"desktop"``; returns the URL opened."""

@@ -8,6 +8,7 @@ import socket
 import pytest
 
 from conftest import free_ports
+from link.page import render_page
 from link.pairing import PairingBook
 from link.server import LinkServer
 
@@ -17,7 +18,8 @@ ORIGIN = "https://app.takumion.com"
 @pytest.fixture
 def served(world, tmp_path):
     pairing = PairingBook(tmp_path / "pairings.json")
-    server = LinkServer(world.service, pairing, free_ports(2), log=lambda line: None)
+    server = LinkServer(world.service, pairing, free_ports(2), log=lambda line: None,
+                        page=lambda: render_page(nonce="tab-nonce-1"))
     server.start()
     yield server, pairing
     server.stop()
@@ -198,10 +200,29 @@ def test_all_ports_taken(world, tmp_path):
 def test_tab_page_is_served_without_pairing(served):
     server, _ = served
     conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=10)
-    conn.request("GET", "/tab", headers={"Host": f"127.0.0.1:{server.port}"})
+    conn.request("GET", "/tab", headers={"Host": f"127.0.0.1:{server.port}", "Origin": "https://evil.example"})
     reply = conn.getresponse()
     html = reply.read().decode()
     conn.close()
     assert reply.status == 200 and reply.getheader("Content-Type").startswith("text/html")
-    assert "Takumion Link" in html and "<script>" in html
+    assert "Takumion Link" in html and "<script>" in html and "tab-nonce-1" in html
+    assert reply.getheader("Access-Control-Allow-Origin") is None, "no website may read the page: it holds the tab nonce"
     assert request(server, "GET", "/tab", host="evil.example:1")[0] == 421
+
+
+def test_pair_bodies_are_capped_and_null_origins_refused(served):
+    server, pairing = served
+    pairing.start_code()
+    status, _, body = request(server, "POST", "/v1/pair", {"code": "1" * 5000, "clientName": "x"}, {"Origin": ORIGIN})
+    assert status == 413 and body["error"]["code"] == "too-large", "a pairing body over 4 KB is refused unread"
+    status, _, body = request(server, "POST", "/v1/pair", {"code": "000000", "clientName": "x"}, {"Origin": "null"})
+    assert status == 403 and "opaque" in body["error"]["message"]
+
+
+def test_pair_refusals_do_not_say_whether_a_code_is_open(served):
+    server, pairing = served
+    _, _, closed = request(server, "POST", "/v1/pair", {"code": "123456", "clientName": "x"}, {"Origin": ORIGIN})
+    live = pairing.start_code()
+    wrong = "000000" if live != "000000" else "111111"
+    _, _, open_ = request(server, "POST", "/v1/pair", {"code": wrong, "clientName": "x"}, {"Origin": ORIGIN})
+    assert closed["error"] == open_["error"]

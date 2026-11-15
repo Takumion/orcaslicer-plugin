@@ -1,16 +1,50 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The Takumion tab inside OrcaSlicer. Talks to the plugin over window.orca:
-// sends {type: "tab", action}, receives {type: "tab-state", state}.
+// sends {type: "tab", nonce, action}, receives {type: "tab-state", state}.
+// The nonce is put in this page by the plugin; a page without it cannot
+// drive the tab. Before navigating the tab away, the page says "leave" so the
+// plugin stops pushing its state (which holds the pairing code).
 (function () {
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const nonceTag = document.querySelector('meta[name="takumion-tab"]');
+  const nonce = nonceTag ? nonceTag.content : "";
+  // The tab's first page goes on to Takumion; /tab (the way back) never does.
+  let openTakumion = !!document.querySelector('meta[name="takumion-open"]');
+  // In the plugin's own window Takumion stays in its tab: no "In this tab" here.
+  const inPanel = !!document.querySelector('meta[name="takumion-view"][content="panel"]');
+  if (inPanel) $("open-here").hidden = true;
+  let offlineNote = "";
   let codeTimer = null;
   let latest = null;
-  let devProbed = false;
 
   function post(action, extra) {
-    if (window.orca && window.orca.postMessage) window.orca.postMessage(Object.assign({type: "tab", action}, extra || {}));
+    if (window.orca && window.orca.postMessage) window.orca.postMessage(Object.assign({type: "tab", nonce, action}, extra || {}));
+  }
+
+  function leaveTo(url) {
+    post("leave");
+    location.assign(url);
+  }
+
+  // Back from Takumion (its Settings › Slicer) this page is /tab?return=<where it
+  // was>: In this tab goes back there — the open project — instead of the
+  // dashboard. Only on the configured Takumion's own origin: the bridge key in
+  // the fragment must never reach another site.
+  function inThisTab(here) {
+    const back = new URLSearchParams(location.search).get("return");
+    if (!back) return here;
+    try {
+      const want = new URL(back);
+      const base = new URL(here);
+      if (want.origin !== base.origin) return here;
+      want.searchParams.set("host", "orca");
+      want.hash = base.hash;
+      return want.toString();
+    } catch (e) {
+      return here;
+    }
   }
 
   function el(tag, cls, text) {
@@ -96,32 +130,31 @@
     });
   }
 
-  // A local Takumion dev server answers on its port: offer it "in this tab" too.
-  // no-cors: only "something answered" matters, not what.
-  function probeDev(targets) {
-    if (devProbed) return;
-    devProbed = true;
-    for (const target of targets || []) {
-      const stop = new AbortController();
-      setTimeout(() => stop.abort(), 1500);
-      fetch(target.probe, {mode: "no-cors", signal: stop.signal}).then(() => {
-        const button = el("button", "secondary", `In this tab (${target.label})`);
-        button.addEventListener("click", () => location.assign(target.url));
-        $("open-dev").append(button);
-      }, () => {});
-    }
+  // Go on to Takumion once it answers; offline, stay here and say so (an error
+  // page in the tab would leave no way back). no-cors: only "it answered" matters.
+  function openTakumionWhenUp(url) {
+    openTakumion = false;
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 5000);
+    fetch(url, {mode: "no-cors", cache: "no-store", signal: stop.signal}).then(
+      () => leaveTo(url),
+      () => {
+        offlineNote = `Takumion did not answer at ${hostOf(url)}. Use Open Takumion when it is back.`;
+        if (latest) render(latest);
+      },
+    );
   }
 
   function render(state) {
     latest = state;
-    probeDev(state.takumionDev);
+    if (openTakumion && state.takumionHere) openTakumionWhenUp(state.takumionHere);
     $("open-here").textContent = `In this tab (${hostOf(state.takumionHere)})`;
     renderStatus(state);
     renderCode(state.code);
     renderPairings(state.pairings || []);
     renderDocs(state.docs || []);
     $("setup").hidden = !(state.setup && state.setup.showCard);
-    $("notice").textContent = state.notice || "";
+    $("notice").textContent = state.notice || offlineNote;
   }
 
   if (window.orca && window.orca.onMessage) {
@@ -133,7 +166,7 @@
   $("pair").addEventListener("click", () => post("pair"));
   $("pair-cancel").addEventListener("click", () => post("cancel-pair"));
   $("setup-done").addEventListener("click", () => post("dismiss-setup"));
-  $("open-here").addEventListener("click", () => { if (latest && latest.takumionHere) location.assign(latest.takumionHere); });
+  $("open-here").addEventListener("click", () => { if (latest && latest.takumionHere) leaveTo(inThisTab(latest.takumionHere)); });
   $("open-desktop").addEventListener("click", () => post("open-takumion", {target: "desktop"}));
   $("open-web").addEventListener("click", () => post("open-takumion", {target: "web"}));
   // Orca's Reload from disk fires no plugin event; this lets the plugin

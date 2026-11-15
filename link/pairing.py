@@ -23,6 +23,9 @@ from .protocol import LinkError
 
 CODE_TTL_S = 120.0
 CODE_TRIES = 5
+# One message for "no code open" and "wrong code": a page probing in the
+# background must not learn when a code goes live.
+REFUSED_MESSAGE = "Wrong or expired pairing code. Click Pair an app in OrcaSlicer's Takumion tab for a new one."
 _LAST_USED_SAVE_S = 60.0
 
 
@@ -137,12 +140,12 @@ class PairingBook:
             live = self._code
             if live is None or live.expires <= self._clock():
                 self._code = None
-                raise LinkError("forbidden", "No pairing code is open, or it expired. Click Pair an app in Orca's Takumion tab.")
+                raise LinkError("forbidden", REFUSED_MESSAGE)
             if not hmac.compare_digest(live.value.encode(), code.encode("ascii", "replace")):
                 live.tries_left -= 1
                 if live.tries_left <= 0:
                     self._code = None
-                raise LinkError("forbidden", "Wrong pairing code.")
+                raise LinkError("forbidden", REFUSED_MESSAGE)
             self._code = None
             token = secrets.token_urlsafe(32)
             now = self._clock()
@@ -178,9 +181,9 @@ class PairingBook:
         self._revoke(lambda p: p.token_hash == _hash(token))
 
     def revoke_id(self, pairing_id: str) -> None:
-        """The tab's *Revoke*: drop the pairing whose public id is given."""
-        if pairing_id:
-            self._revoke(lambda p: p.token_hash.startswith(pairing_id))
+        """The tab's *Revoke*: drop the pairing whose public id (16 hex) is given — exactly that one."""
+        if len(pairing_id) == 16:
+            self._revoke(lambda p: p.token_hash[:16] == pairing_id)
 
     def _revoke(self, match: Callable[[Pairing], bool]) -> None:
         with self._lock:

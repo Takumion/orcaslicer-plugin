@@ -84,15 +84,26 @@ def test_load_serve_refresh_unload(plugin, monkeypatch):
     html = tab.get_ui()
     assert "<script>" in html and "Takumion Link" in html and 'src="app.js"' not in html
     assert app.service.orca_version == "2.5.1"
+    nonce = re.search(r'name="takumion-tab" content="([^"]+)"', html).group(1)
+    assert nonce == app.tab.nonce
+    assert '<meta name="takumion-open"' in html, "the tab's first page goes on to Takumion by default"
+    with urllib.request.urlopen(f"http://127.0.0.1:{app.server.port}/tab", timeout=5) as reply:
+        assert '<meta name="takumion-open"' not in reply.read().decode(), "/tab is the way back: it never jumps away"
+    orca.config = json.dumps({"openTakumionInTab": "false"})
+    assert '<meta name="takumion-open"' not in tab.get_ui(), "the Config switch keeps the plugin's page"
+    orca.config = "{}"
+    tab.on_message(json.dumps({"type": "tab", "nonce": nonce, "action": "ready"}))
 
     linked = str(data_dir / "takumion" / "links" / "p" / "b" / "Base.stl")
     orca.plater_obj.the_model.items.append(FakeObject(1, "Base", linked))
     tab.on_lifecycle_event(LifecycleEvent.ObjectAdded, None)
     assert app.plate.on_plate(linked)
 
-    assert tab.posted[-1]["state"]["takumionHere"] == "https://app.takumion.com/?host=orca"
+    assert tab.posted[-1]["state"]["takumionHere"].startswith("https://app.takumion.com/?host=orca#orcaLinkKey=")
 
     tab.on_message(json.dumps({"type": "tab", "action": "pair"}))
+    assert app.pairing.live_code() is None, "a message without the nonce is ignored"
+    tab.on_message(json.dumps({"type": "tab", "nonce": nonce, "action": "pair"}))
     assert tab.posted[-1]["type"] == "tab-state" and tab.posted[-1]["state"]["code"]
 
     tab.on_unload()

@@ -63,3 +63,23 @@ def test_atomic_write_leaves_no_temp(tmp_path):
     write_bytes_atomic(target, b"two")
     assert target.read_bytes() == b"two"
     assert [p.name for p in target.parent.iterdir()] == ["b.stl"]
+
+
+def test_atomic_write_opens_only_paths(tmp_path):
+    """Orca's sandbox asks the user about an open() of a bare file descriptor
+    ("FsReadWrite:open"); a path in the data folder needs no question."""
+    import sys
+
+    seen = []
+    recording = [True]
+
+    def hook(event, args):
+        if recording[0] and event == "open":
+            seen.append(args[0])
+
+    sys.addaudithook(hook)
+    try:
+        write_bytes_atomic(tmp_path / "a" / "x.stl", b"data")
+    finally:
+        recording[0] = False
+    assert seen and not any(isinstance(target, int) for target in seen), seen

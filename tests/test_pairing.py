@@ -92,7 +92,11 @@ def test_revoke_by_token_and_by_id(book):
     two = pairing.pair(pairing.start_code(), "https://b", "y")
     pairing.revoke_token(one)
     assert not pairing.check(one, "https://a")
-    pairing.revoke_id(pairing.pairings()[0]["id"])
+    remaining = pairing.pairings()[0]["id"]
+    pairing.revoke_id(remaining[:1])
+    pairing.revoke_id(remaining[:8])
+    assert pairing.check(two, "https://b"), "a prefix of an id revokes nothing"
+    pairing.revoke_id(remaining)
     assert not pairing.check(two, "https://b")
     assert pairing.pairings() == []
 

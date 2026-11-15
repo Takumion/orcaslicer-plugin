@@ -8,14 +8,14 @@ written here.
 - **Plugin:** listens on loopback, writes the files, puts them on Orca's plate,
   tracks which plate objects are linked to which bodies.
 - **Takumion:** exports meshes, pairs once, sends.
-- **Design and decisions:** [`plans/orca-slicer-link.md`](../plans/orca-slicer-link.md).
+- **Design and decisions:** kept with Takumion (`plans/orca-slicer-link.md` in its repository).
 
 Two transports carry the same messages:
 
 | Transport | Used by | Pairing |
 |---|---|---|
 | HTTP/JSON on `127.0.0.1` | Takumion in a browser or the desktop app | Required |
-| `window.orca` bridge | Takumion running inside Orca's plugin tab | Not needed |
+| `window.orca` bridge | Takumion running inside Orca's plugin tab | Not needed (a bridge key instead) |
 
 ## Discovery
 
@@ -26,7 +26,9 @@ A client remembers the last port that answered and tries it first.
 
 No answer on any port means Orca is not running, or runs without the plugin.
 The desktop app may then start Orca (no file argument) and probe again for up to
-30 s; the web app shows how to start it.
+30 s; the web app shows how to start it. What a client does when no plugin is
+installed at all (hand the files to Orca itself, offer a download) is outside
+this protocol.
 
 ## Security
 
@@ -39,11 +41,15 @@ The desktop app may then start Orca (no file argument) and probe again for up to
   pseudo-origin `native:<clientName>`.
 - **Pairing codes** are shown in the plugin's Orca tab only after the user clicks
   *Pair an app*. A code has 6 digits, lives 120 s, and dies after 5 wrong tries.
+  A wrong code and "no code open" get the same refusal, so a page cannot tell when
+  a code goes live. A request whose `Origin` is `null` (sandboxed frames, `data:`
+  pages — all sharing that one value) cannot pair.
 - **Tokens** are 32 random bytes, base64url. The plugin stores only their SHA-256,
   with origin, client name, created and last-used times. The user can revoke any
   pairing from the Orca tab.
 - **CORS.** `hello` and `pair` answer any origin (they reveal nothing and need a
-  code). Every other endpoint echoes `Access-Control-Allow-Origin` only for a
+  code). `GET /tab` never sends `Access-Control-Allow-Origin`: its page carries the
+  tab nonce (see *Bridge transport*). Every other endpoint echoes `Access-Control-Allow-Origin` only for a
   paired origin — except an **error reply**, which always echoes the request's
   origin: a refusal (`401` after the user revoked the pairing in Orca, `400`,
   `413`, `421`) reveals nothing, and without the header the browser hides it
@@ -56,7 +62,8 @@ The desktop app may then start Orca (no file argument) and probe again for up to
   seen. Preflights carrying `Access-Control-Request-Private-Network`
   are answered with `Access-Control-Allow-Private-Network: true` (Chrome's
   private/local network access).
-- **Limits.** Request body ≤ 384 MB (`413` above). Keys are
+- **Limits.** Request body ≤ 384 MB (`413` above); a `pair` body ≤ 4 KB, refused
+  unread above that. Keys are
   `[A-Za-z0-9_-]{1,128}`; anything else is `400`.
 
 ## Messages
@@ -183,22 +190,54 @@ reply, delivered to `window.orca.onMessage`:
 ```
 or `{"type": "takumion-link", "id": 7, "error": {"code": "…", "message": "…"}}`.
 
-Methods: `hello`, `send`, `links`. No pairing: the plugin only ever navigates its
-own tab to the Takumion app.
+Methods: `hello`, `send`, `links`, and one that exists only here: **`show-panel`**
+opens the plugin's own page (status, pairing, linked files) in its own Orca
+window, so Takumion stays loaded in its tab; its result is `{"shown": true}`, or
+`false` on an Orca without plugin windows (the client then navigates the tab to
+`tab.url`, below). No pairing, but every call carries a
+**bridge `key`**:
 
-**Getting there and back.** The plugin's tab has an *Open Takumion here* button
-that navigates the tab to `<takumionUrl>?host=orca` (`takumionUrl` is the plugin's
-setting: `https://app.takumion.com/` by default, a local dev server while
-developing). Orca injects `window.orca` into the page after the navigation.
+```json
+{"type": "takumion-link", "id": 7, "key": "…", "method": "hello", "params": {}}
+```
+
+Orca injects `window.orca` into **any** page its plugin tab shows — Takumion, and
+whatever a link from Takumion opens there (Orca loads new-window links in the same
+tab), and it does not tell the plugin which page sent a message. So:
+
+- The plugin makes a random key per load and puts it only in the **URL fragment**
+  of the *In this tab* link: `<takumionUrl>?host=orca#orcaLinkKey=<key>`. A
+  fragment never reaches a server or a `Referer`.
+- The editor moves the key into its tab's `sessionStorage` at boot (same origin
+  only; it survives a reload) and removes it from the URL.
+- A call without the right key is answered `forbidden` ("This page was not opened
+  by the Takumion Link plugin."). One `send` runs at a time; a second one while it
+  runs is `orca-busy`.
+
+The plugin's own tab page is driven the same way: it is rendered with a random
+**tab nonce** (`<meta name="takumion-tab">`), sends it with every
+`{"type": "tab", …}` message, and the plugin ignores tab messages without it. The
+plugin pushes its tab state — which holds a live pairing code — only while its own
+page is showing: from that page's first message until it says `leave`, which it
+does before navigating the tab to Takumion.
+
+**Getting there and back.** The tab opens Takumion by itself: the first page Orca
+shows in it goes on to Takumion as soon as Takumion answers (plugin setting
+`openTakumionInTab`, `true` by default; offline, it stays on the plugin's page and
+says so). The plugin's page also has an *Open Takumion › In this tab*
+button. Both navigate the tab to `<takumionUrl>?host=orca#orcaLinkKey=<key>`
+(`takumionUrl` is the plugin's setting: `https://app.takumion.com/` by default; a
+plain-`http` URL is accepted only for `localhost` / `127.0.0.1`, for a local dev
+server). Orca injects `window.orca` into the page after the navigation.
 Over the bridge, `hello`'s result carries one more, optional field:
 
 ```json
 {"app": "takumion-orca-link", "protocol": 1, "…": "…", "tab": {"url": "http://127.0.0.1:47390/tab"}}
 ```
 
-`GET /tab` on the loopback server serves the plugin's own tab page (static HTML,
-`Host`-checked like every endpoint, no data in it; its state comes over
-`window.orca`). The editor's "back to Takumion Link" navigates there. `tab` is
+`GET /tab` on the loopback server serves the plugin's own tab page (HTML with the
+tab nonce, `Host`-checked like every endpoint, never readable cross-origin; its
+state comes over `window.orca`). The editor's "back to Takumion Link" navigates there. `tab` is
 optional and absent over HTTP, so it needs no protocol bump.
 
 ## 3MF and Orca's load behavior

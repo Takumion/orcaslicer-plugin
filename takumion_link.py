@@ -19,6 +19,7 @@ and plate files, and the hand-off that puts files on the plate. Protocol:
 
 import json
 import sys
+import time
 import traceback
 from typing import Any
 
@@ -56,6 +57,7 @@ if orca is not None and hasattr(orca, "pages"):
 
         app: LinkApp | None = None
         bus_touched = False
+        last_message_sync = 0.0
 
         def get_name(self) -> str:
             return TAB_NAME
@@ -64,19 +66,28 @@ if orca is not None and hasattr(orca, "pages"):
             return ""
 
         def get_default_config(self) -> dict[str, str]:
-            """Orca's Config tab: which Takumion *Open Takumion* opens."""
-            return {"takumionUrl": WEB_URL}
+            """Orca's Config tab: which Takumion *Open Takumion* opens, and
+            whether the tab opens it by itself ("false" keeps the plugin's page)."""
+            return {"takumionUrl": WEB_URL, "openTakumionInTab": "true"}
+
+        def _config(self) -> dict[str, Any]:
+            try:
+                config = json.loads(self.get_config() or "{}")
+            except (ValueError, AttributeError):
+                return {}
+            return config if isinstance(config, dict) else {}
 
         def _takumion_url(self) -> str:
-            try:
-                return str(json.loads(self.get_config() or "{}").get("takumionUrl") or WEB_URL)
-            except (ValueError, AttributeError):
-                return WEB_URL
+            return str(self._config().get("takumionUrl") or WEB_URL)
+
+        def _open_takumion_in_tab(self) -> bool:
+            return str(self._config().get("openTakumionInTab", "true")).strip().lower() not in ("false", "0", "no", "off")
 
         def on_load(self) -> None:
             try:
                 self.app = LinkApp(data_dir_for(__file__), notifier=OrcaNotifier(orca, log),
-                                   post=self.post_message, web_url=self._takumion_url(), log=log)
+                                   post=self.post_message, web_url=self._takumion_url(), log=log,
+                                   panel_host=self._panel_host())
                 self.app.start()
             except Exception:  # noqa: BLE001 - never take Orca down
                 log("load failed:\n" + traceback.format_exc())
@@ -91,12 +102,46 @@ if orca is not None and hasattr(orca, "pages"):
 
         def get_ui(self) -> str:
             self._sync("PageOpened")
-            return render_page()
+            # The nonce makes the plugin's own page the only one that can drive the tab.
+            # The tab shows Takumion by default; the plugin's page stays one click away
+            # (Takumion › Settings › Slicer › Back to Takumion Link, which loads /tab).
+            if self.app is None:
+                return render_page()
+            return self.app.page(open_takumion=self._open_takumion_in_tab())
+
+        def _panel_host(self) -> Any:
+            """A modeless Orca window for the plugin's page, where this Orca has
+            plugin windows. Not a docked panel: those live only on Prepare and
+            Preview, and a plugin cannot switch tabs, so one opened from the
+            Takumion tab would stay out of sight."""
+            ui = getattr(getattr(orca, "host", None), "ui", None)
+            if ui is None or not hasattr(ui, "create_window"):
+                return None
+
+            def open_panel(html: str, on_message: Any, on_close: Any) -> Any:
+                def message(data: Any) -> None:
+                    self._sync_throttled()
+                    try:
+                        on_message(data)
+                    except Exception:  # noqa: BLE001
+                        log("panel message failed:\n" + traceback.format_exc())
+
+                return ui.create_window(html, title="Takumion Link", width=860, height=700, on_message=message,
+                                        on_close=on_close, style=getattr(ui, "WINDOW_MODELESS", 0))
+
+            return open_panel
+
+        def _sync_throttled(self) -> None:
+            """At most one plate read a second, however fast a page posts (UI thread)."""
+            now = time.monotonic()
+            if now - self.last_message_sync >= 1.0:
+                self.last_message_sync = now
+                self._sync("PageMessage")
 
         def on_message(self, message: str) -> None:
             if self.app is None:
                 return
-            self._sync("PageMessage")
+            self._sync_throttled()
             try:
                 self.app.on_page_message(message)
             except Exception:  # noqa: BLE001

@@ -24,16 +24,22 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9_.-]+")
 _ORCA_DENIED_COMPONENTS = frozenset({"secret", "secrets", "cert", "certs", "certificate", "certificates", "conf", "config"})
 
 
+# Windows refuses these as a file or folder name, with or without an extension.
+_WINDOWS_RESERVED = frozenset({"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))})
+
+
 def folder_name(key: str) -> str:
     """A protocol key as a folder name, prefixed with ``_`` when Orca's
-    sandbox would refuse it (``config``, ``secret``, …)."""
-    return f"_{key}" if key.lower() in _ORCA_DENIED_COMPONENTS else key
+    sandbox would refuse it (``config``, ``secret``, …) or Windows would (``CON``, ``COM1``, …)."""
+    lowered = key.lower()
+    return f"_{key}" if lowered in _ORCA_DENIED_COMPONENTS or lowered in _WINDOWS_RESERVED else key
 
 
 def safe_name(name: str) -> str:
     """A file-name stem from a body name: ASCII letters, digits, ``_.-`` only,
-    at most 60 characters, never empty or hidden."""
-    return _UNSAFE.sub("_", name).strip("._")[:60] or "body"
+    at most 60 characters, never empty, hidden or a Windows device name."""
+    stem = _UNSAFE.sub("_", name).strip("._")[:60] or "body"
+    return f"_{stem}" if stem.split(".")[0].lower() in _WINDOWS_RESERVED else stem
 
 
 def same_path(a: str | os.PathLike[str], b: str | os.PathLike[str]) -> bool:

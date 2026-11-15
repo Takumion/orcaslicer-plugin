@@ -16,12 +16,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from .page import render_page
 from .pairing import PairingBook
 from .protocol import LOOPBACK, MAX_BODY_BYTES, PORTS, UNPAIRED_MESSAGE, LinkError, parse_pair, parse_send
 from .service import LinkService
 
+# Reachable without a token.
 _OPEN_PATHS = frozenset({"/v1/hello", "/v1/pair", "/tab"})
+# Readable from any origin (CORS). Not /tab: its page carries the tab nonce.
+_CORS_OPEN_PATHS = frozenset({"/v1/hello", "/v1/pair"})
+# A pairing request is a code and a client name: anything bigger is refused unread.
+PAIR_MAX_BYTES = 4096
 _ALLOW_HEADERS = "Authorization, Content-Type"
 _ALLOW_METHODS = "GET, POST, DELETE"
 
@@ -47,9 +51,10 @@ class LinkServer:
     ``on_load``, ``stop`` in ``on_unload``."""
 
     def __init__(self, service: LinkService, pairing: PairingBook, ports: tuple[int, ...] = PORTS,
-                 log: Callable[[str], None] = print) -> None:
+                 log: Callable[[str], None] = print, page: Callable[[], str] = lambda: "") -> None:
         self.service = service
         self.pairing = pairing
+        self.page = page
         self._ports = ports
         self._log = log
         self._httpd: _LoopbackHTTPServer | None = None
@@ -127,11 +132,12 @@ class _LinkHandler(BaseHTTPRequestHandler):
     def _cors_origin(self, status: int = 200) -> str | None:
         """The origin to echo: any origin for ``hello`` / ``pair``, for a
         preflight and for an error reply (a refusal reveals nothing, and the
-        client must be able to read "pair again"); a paired origin otherwise."""
+        client must be able to read "pair again"); a paired origin otherwise.
+        Never for ``/tab``: its page holds the tab nonce."""
         origin = self._origin
-        if not origin:
+        if not origin or self._route == "/tab":
             return None
-        if self._route in _OPEN_PATHS or status >= 400 or self.command == "OPTIONS":
+        if self._route in _CORS_OPEN_PATHS or status >= 400 or self.command == "OPTIONS":
             return origin
         return origin if self.link.pairing.is_paired_origin(origin) else None
 
@@ -162,13 +168,14 @@ class _LinkHandler(BaseHTTPRequestHandler):
         self.close_connection = True
         self._reply(error.status, error.to_json(), {"Connection": "close"})
 
-    def _read_json(self) -> Any:
+    def _read_json(self, limit: int = MAX_BODY_BYTES) -> Any:
         length_header = self.headers.get("Content-Length")
         if length_header is None or not length_header.isdigit():
             raise LinkError("bad-request", "Content-Length is required.")
         length = int(length_header)
-        if length > MAX_BODY_BYTES:
-            raise LinkError("too-large", "The request is larger than 384 MB.")
+        if length > limit:
+            raise LinkError("too-large", "The request is larger than 384 MB." if limit == MAX_BODY_BYTES
+                            else f"The request is larger than {limit} bytes.")
         raw = self.rfile.read(length)
         try:
             return json.loads(raw.decode("utf-8")) if raw else None
@@ -181,7 +188,10 @@ class _LinkHandler(BaseHTTPRequestHandler):
         self._reply(200, self.link.service.hello(self._authorized()))
 
     def _pair(self) -> None:
-        code, client = parse_pair(self._read_json())
+        # Sandboxed iframes and data: pages all send "null": a token bound to it would be shared by every one of them.
+        if self._origin == "null":
+            raise LinkError("forbidden", "This page cannot pair: its origin is opaque (null).")
+        code, client = parse_pair(self._read_json(PAIR_MAX_BYTES))
         self._reply(200, {"token": self.link.pairing.pair(code, self._origin, client)})
 
     def _unpair(self) -> None:
@@ -191,7 +201,7 @@ class _LinkHandler(BaseHTTPRequestHandler):
     def _tab(self) -> None:
         """The Orca tab's page, so Takumion shown in the tab can navigate back
         to it. Static; its state arrives over ``window.orca``."""
-        data = render_page().encode("utf-8")
+        data = self.link.page().encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
@@ -230,9 +240,9 @@ class _LinkHandler(BaseHTTPRequestHandler):
             route(self)
         except LinkError as error:
             self._error(error)
-        except Exception as exc:  # noqa: BLE001 - every failure must reach the client as `internal`
+        except Exception:  # noqa: BLE001 - every failure must reach the client as `internal`; details stay in the log
             self.link._log("internal error: " + traceback.format_exc())
-            self._error(LinkError("internal", f"{type(exc).__name__}: {exc}"))
+            self._error(LinkError("internal", "The Takumion Link plugin failed; OrcaSlicer's log has the details."))
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib name
         self._handle("GET")

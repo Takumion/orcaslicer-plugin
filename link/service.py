@@ -137,7 +137,8 @@ class LinkService:
                 try:
                     outcome = self._prepare(request, part)
                 except OSError as exc:
-                    outcome = _failed(part, f"Could not write the file: {exc}")
+                    # The OS reason only: the path names this computer's user.
+                    outcome = _failed(part, f"Could not write the file ({exc.strerror or type(exc).__name__}).")
                 if isinstance(outcome, _Handed):
                     handed.append(outcome)
                 else:

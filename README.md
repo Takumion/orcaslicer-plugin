@@ -31,13 +31,34 @@ loopback protocol: [`docs/slicer-link-protocol.md`](docs/slicer-link-protocol.md
    into Takumion (*Send to OrcaSlicer…* or *Settings › Slicer*). The code
    lives 120 s and allows 5 tries.
 
+The **Takumion** tab opens Takumion itself by default (when it answers). This
+plugin's own page — status, pairing, linked files — opens in **its own window**
+from Takumion's *Settings › Slicer › Open Takumion Link*, so Takumion stays
+loaded in its tab. Set `openTakumionInTab` to `false` in the
+plugin's Config tab to start on the plugin's page in the tab instead.
+
 *Open Takumion* can show Takumion **in this tab** (no pairing: it talks to the
-plugin over Orca's page bridge), or open the desktop or web app; opening an app
-asks once more, the first time, to run the system's URL opener. The web address
-is the `takumionUrl` setting in the plugin's Config tab in Orca (default
-`https://app.takumion.com/`). When a local Takumion dev server answers on
-`localhost:5174` or `localhost:5180`, the tab offers it as one more *In this
-tab* button; nothing else changes for users without one.
+plugin over Orca's page bridge, with a key only the page the plugin opened
+knows), or open the desktop or web app; opening an app asks once more, the
+first time, to run the system's URL opener. The web address is the
+`takumionUrl` setting in the plugin's Config tab in Orca (default
+`https://app.takumion.com/`; plain `http` only for `localhost` /
+`127.0.0.1`, e.g. a local Takumion dev server).
+
+### Security
+
+- The link server listens on `127.0.0.1` only and refuses any other `Host`
+  (no DNS rebinding). Everything but `hello` and `pair` needs a token bound to
+  the browser origin that paired; tokens are stored hashed and can be revoked
+  in the tab.
+- Pairing codes appear only after you click **Pair an app**, live 120 s and
+  allow 5 tries.
+- Orca shows any page in the tab with its bridge, so the tab's own page and
+  Takumion in the tab each carry a per-load secret; messages without it are
+  ignored or refused, and the pairing code is never sent to another page.
+- The whole contract is [`docs/slicer-link-protocol.md`](docs/slicer-link-protocol.md).
+  Found a problem? Open an issue, or for anything sensitive contact the
+  Takumion team privately first.
 
 ### STL by default; 3MF needs one Orca setting
 

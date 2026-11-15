@@ -12,7 +12,8 @@ real loopback link server, against a simulated plate.
 - "Orca" is simulated: a handed-off file lands on the plate after 0.3 s
   (``--orca dialog`` never lands it, ``--orca project`` opens it as the project).
   GET /plate shows the simulated plate; POST /plate/reload?path=… simulates
-  *Reload from disk*.
+  *Reload from disk* (send it with ``Content-Type: application/json``; the
+  server takes JSON posts only, and only with a 127.0.0.1/localhost Host).
 """
 
 from __future__ import annotations
@@ -32,7 +33,6 @@ sys.path.insert(0, str(REPO))
 from link.app import LinkApp  # noqa: E402
 from link.handoff import Handoff  # noqa: E402
 from link.launcher import Launcher  # noqa: E402
-from link.page import render_page  # noqa: E402
 from link.plate import PlateObject  # noqa: E402
 from link.store import same_path  # noqa: E402
 
@@ -40,7 +40,7 @@ SHIM = """<script>
 (function () {
   var handlers = [];
   window.orca = {
-    postMessage: function (data) { fetch('/bridge', {method: 'POST', body: JSON.stringify(data)}); },
+    postMessage: function (data) { fetch('/bridge', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)}); },
     onMessage: function (cb) { handlers.push(cb); }
   };
   new EventSource('/events').onmessage = function (e) {
@@ -128,10 +128,18 @@ def page_handler(app: LinkApp, events: Events, orca: SimulatedOrca) -> type[Base
             self.end_headers()
             self.wfile.write(body)
 
+        def _host_ok(self) -> bool:
+            # Same rule as the link server: no DNS-rebinding page may read /events (it carries the code).
+            port = self.server.server_address[1]
+            return self.headers.get("Host", "") in {f"127.0.0.1:{port}", f"localhost:{port}"}
+
         def do_GET(self):  # noqa: N802
+            if not self._host_ok():
+                self._send(421, b"bad host", "text/plain")
+                return
             route = urlsplit(self.path).path
             if route == "/":
-                self._send(200, render_page(SHIM).encode(), "text/html; charset=utf-8")
+                self._send(200, app.page(SHIM).encode(), "text/html; charset=utf-8")
             elif route == "/plate":
                 plate = [o.__dict__ for o in orca.objects]
                 self._send(200, json.dumps({"objects": plate, "project": orca.project}, indent=1).encode(), "application/json")
@@ -155,6 +163,10 @@ def page_handler(app: LinkApp, events: Events, orca: SimulatedOrca) -> type[Base
                 events.drop(q)
 
         def do_POST(self):  # noqa: N802
+            # JSON only: a cross-site form or text/plain fetch cannot reach /bridge without a preflight this server never answers.
+            if not self._host_ok() or not self.headers.get("Content-Type", "").startswith("application/json"):
+                self._send(403, b"refused", "text/plain")
+                return
             parts = urlsplit(self.path)
             raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
             if parts.path == "/bridge":
