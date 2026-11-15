@@ -68,8 +68,9 @@ its files*, suggested `~/Documents/Takumion`). Sends wait until one is set.
 OrcaSlicer lets a plugin write to a folder only when it allows it at start-up,
 so after saving, **restart OrcaSlicer once** and allow the folder when it asks.
 Files sit flat in that folder, named `Project - Body.stl` (Update) and
-`Project - Body 2026-11-15 105030.stl` (Add copy): OrcaSlicer would ask about
-every subfolder a plugin creates, so there are none.
+`Project - Body 2026-11-15 105030.stl` (Add copy), with the project itself
+beside them as `Project.cad` (open it in Takumion with File › Open).
+OrcaSlicer would ask about every subfolder a plugin creates, so there are none.
 
 ### STL by default; 3MF needs one Orca setting
 

@@ -101,6 +101,37 @@ class LinkStore:
         return any(same_path(link.path, path) or str(link.path).lower() == str(path).lower()
                    for link in self.all_links() if (link.doc_key, link.body_key) != (doc_key, body_key))
 
+    def project_path(self, folder: Path, doc_key: str, doc_name: str) -> Path:
+        """Where the document's ``.cad`` lives in ``folder``: ``<Project>.cad``,
+        decided at its first send (a renamed project keeps its file); the key's
+        start is added when another document already has that name."""
+        with self._lock:
+            known = self._docs.get(doc_key, {}).get("project", {})
+            others = [str(doc.get("project", {}).get("path", "")).lower()
+                      for key, doc in self._docs.items() if key != doc_key]
+        path = known.get("path") if isinstance(known, dict) else None
+        if isinstance(path, str) and Path(path).parent == folder:
+            return Path(path)
+        candidate = folder / f"{display_name(doc_name, 'Takumion')}.cad"
+        if str(candidate).lower() in others:
+            candidate = folder / f"{display_name(doc_name, 'Takumion')} ({doc_key[:8]}).cad"
+        return candidate
+
+    def project_sha256(self, doc_key: str) -> str:
+        """The hash of the ``.cad`` last written for the document, or ``""``."""
+        with self._lock:
+            known = self._docs.get(doc_key, {}).get("project", {})
+        return str(known.get("sha256", "")) if isinstance(known, dict) else ""
+
+    def put_project(self, doc_key: str, doc_name: str, path: Path, sha256: str) -> None:
+        """Remember the document's ``.cad`` file and what was written to it."""
+        with self._lock:
+            doc = self._docs.setdefault(doc_key, {"name": "", "bodies": {}})
+            if doc_name:
+                doc["name"] = doc_name
+            doc["project"] = {"path": str(path), "sha256": sha256}
+            self._save()
+
     def get(self, doc_key: str, body_key: str) -> Link | None:
         """The body's link, if it has one."""
         with self._lock:

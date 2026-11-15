@@ -73,6 +73,8 @@ class SendRequest:
     mode: str
     format: str
     parts: tuple[Part, ...]
+    # The Takumion project (.cad) the bodies come from, written beside them; optional.
+    project: bytes | None = None
 
 
 def check_key(value: Any, what: str) -> str:
@@ -111,6 +113,20 @@ def _part(raw: Any) -> Part:
     )
 
 
+def _project(raw: Any) -> bytes | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise LinkError("bad-request", "project must be an object.")
+    try:
+        data = base64.b64decode(_text(raw.get("data"), "project.data"), validate=True)
+    except binascii.Error as exc:
+        raise LinkError("bad-request", f"project.data is not base64: {exc}") from None
+    if not data:
+        raise LinkError("bad-request", "project.data is empty.")
+    return data
+
+
 def parse_send(body: Any) -> SendRequest:
     """Validate a send body and decode its parts; any flaw is ``bad-request``."""
     if not isinstance(body, dict):
@@ -130,6 +146,7 @@ def parse_send(body: Any) -> SendRequest:
         mode=_choice(body.get("mode"), MODES, "mode"),
         format=_choice(body.get("format"), FORMATS, "format"),
         parts=parts,
+        project=_project(body.get("project")),
     )
 
 

@@ -161,8 +161,30 @@ class LinkService:
                 else:
                     results[part.body_key] = outcome
             needs_setup = self._hand_off(request, handed, results)
+            project = self._write_project(request, folder)
         self._changed()
-        return {"results": [results[p.body_key] for p in request.parts], "needsOrcaSetup": needs_setup}
+        answer = {"results": [results[p.body_key] for p in request.parts], "needsOrcaSetup": needs_setup}
+        if project is not None:
+            answer["project"] = project
+        return answer
+
+    def _write_project(self, request: SendRequest, folder: Path) -> dict[str, Any] | None:
+        """The project's ``.cad`` beside its bodies' files, rewritten only when
+        it changed. Never handed to Orca: it is Takumion's, for File › Open."""
+        if request.project is None:
+            return None
+        path = self.store.project_path(folder, request.doc_key, request.doc_name)
+        digest = hashlib.sha256(request.project).hexdigest()
+        existed = path.exists()
+        if existed and self.store.project_sha256(request.doc_key) == digest:
+            return {"action": "unchanged", "file": path.name}
+        try:
+            write_bytes_atomic(path, request.project)
+        except OSError as exc:
+            return {"action": "failed", "file": path.name,
+                    "message": f"Could not write the project file ({exc.strerror or type(exc).__name__})."}
+        self.store.put_project(request.doc_key, request.doc_name, path, digest)
+        return {"action": "updated" if existed else "added", "file": path.name}
 
     # ----------------------------------------------------------------- send
 

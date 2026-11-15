@@ -177,3 +177,30 @@ def test_a_body_linked_before_the_folder_changed_gets_a_file_in_the_new_folder(w
     result = only(send(world, parts=(("body_1", "Base", b"v2"),)))
     link = world.store.get("prj_1", "body_1")
     assert result["action"] == "added" and link.path == str(moved / "Bracket - Base.stl") and link.path != old
+
+
+def send_with_project(world, cad, doc=("prj_1", "Bracket")):
+    req = parse_send({"doc": {"key": doc[0], "name": doc[1]}, "mode": "update", "format": "stl",
+                      "parts": [{"bodyKey": "body_1", "name": "Base", "data": base64.b64encode(b"v1").decode()}],
+                      "project": {"data": base64.b64encode(cad).decode()}})
+    return world.service.send(req)
+
+
+def test_the_project_file_lands_beside_its_bodies_and_is_never_handed_to_orca(world):
+    first = send_with_project(world, b"cad-1")
+    cad = world.files / "Bracket.cad"
+    assert first["project"] == {"action": "added", "file": "Bracket.cad"} and cad.read_bytes() == b"cad-1"
+    assert all(not p.endswith(".cad") for p in world.orca.delivered), "Orca gets meshes only"
+    assert send_with_project(world, b"cad-1")["project"]["action"] == "unchanged"
+    assert send_with_project(world, b"cad-2")["project"]["action"] == "updated" and cad.read_bytes() == b"cad-2"
+    other = send_with_project(world, b"other", doc=("prj_2xxxxxxx", "Bracket"))
+    assert other["project"]["file"] == "Bracket (prj_2xxx).cad", "another project of the same name gets its key"
+    assert "project" not in send(world), "no project sent, none written or reported"
+
+
+def test_a_malformed_project_is_a_bad_request():
+    for project in ("x", {"data": ""}, {"data": "not base64!"}):
+        with pytest.raises(LinkError) as caught:
+            parse_send({"doc": {"key": "p", "name": "P"}, "mode": "add", "format": "stl",
+                        "parts": [{"bodyKey": "b", "name": "B", "data": "AA=="}], "project": project})
+        assert caught.value.code == "bad-request"

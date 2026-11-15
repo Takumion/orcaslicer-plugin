@@ -114,7 +114,8 @@ Revokes the caller's own token. → `204`.
   "parts": [
     {"bodyKey": "body_1", "name": "Base", "data": "UEsDBBQ…"},
     {"bodyKey": "body_2", "name": "Lid",  "data": "UEsDBBQ…"}
-  ]
+  ],
+  "project": {"data": "UEsDBBQ…"}
 }
 ```
 
@@ -128,6 +129,11 @@ Revokes the caller's own token. → `204`.
     plate again.
   - `"add"` — write a new, time-stamped file and put it on the plate. Never linked.
 - `format`: `"3mf"` or `"stl"`.
+- `project` (optional): the Takumion project (`.cad`, base64) the bodies come
+  from. The plugin writes it beside them as `<Project>.cad` (see *Files on
+  disk*) — rewritten only when it changed — and never hands it to Orca. A
+  client that cannot write the whole project (the file format cannot carry a
+  feature yet) sends the bodies without it rather than a partial project.
 
 → `200`:
 
@@ -137,10 +143,14 @@ Revokes the caller's own token. → `204`.
     {"bodyKey": "body_1", "action": "updated", "onPlate": true,  "reloadNeeded": true},
     {"bodyKey": "body_2", "action": "added",   "onPlate": true,  "reloadNeeded": false}
   ],
-  "needsOrcaSetup": false
+  "needsOrcaSetup": false,
+  "project": {"action": "updated", "file": "Bracket.cad"}
 }
 ```
 
+- `project` (only when the send carried one): `action` is `"added"`,
+  `"updated"`, `"unchanged"` or `"failed"` (with `message`); `file` is its name
+  in the folder.
 - `action`: `"added"` (put on the plate), `"updated"` (file overwritten, object
   already on the plate) or `"failed"` (with `message`).
 - `onPlate`: `true` when the plugin saw the object arrive (lifecycle event with
@@ -278,6 +288,7 @@ use, `send` is refused with `setup-needed`. Orca's sandbox shapes the rest:
 
 ```
 <folder>/
+  <Project>.cad                                the project the bodies come from (when sent)
   <Project> - <Body>.<fmt>                     update mode: path fixed at first send
   <Project> - <Body> <YYYY-MM-DD HHMMSS>.<fmt>  add mode
 ```
