@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takumion Link</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header class="top">
+    <div>
+      <h1>Takumion Link</h1>
+      <p class="muted" id="versions">Starting…</p>
+    </div>
+    <span class="pill" id="status">…</span>
+  </header>
+
+  <section class="card setup" id="setup" hidden>
+    <h2>One-time setup for 3MF</h2>
+    <p>In OrcaSlicer, open <b>Preferences</b> and set <b>Load behavior</b> to <b>Load geometry only</b>.</p>
+    <p class="muted">Otherwise Orca asks about every 3MF from Takumion, and on an empty plate it opens the file
+      as the project — a later <i>Save</i> would write the project into the linked file. STL needs no setup.</p>
+    <button id="setup-done">Done</button>
+  </section>
+
+  <section class="card">
+    <h2>Pair an app</h2>
+    <div id="pair-idle">
+      <p class="muted">Pair once per browser or desktop app. Takumion asks for the code in
+        <i>Send to OrcaSlicer</i> or <i>Settings › Slicer</i>.</p>
+      <button id="pair">Pair an app</button>
+    </div>
+    <div id="pair-live" hidden>
+      <p>Enter this code in Takumion:</p>
+      <p class="code" id="code" aria-live="polite"></p>
+      <p class="muted" id="code-left"></p>
+      <button class="secondary" id="pair-cancel">Cancel</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Paired apps</h2>
+    <p class="muted" id="pairings-empty">None yet.</p>
+    <ul class="rows" id="pairings"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Linked bodies</h2>
+    <p class="muted" id="docs-empty">Nothing sent yet. In Takumion: <i>File › Export › Send to OrcaSlicer…</i></p>
+    <div id="docs"></div>
+    <p class="muted small">After an update: right-click the object on the plate › <b>Reload from disk</b>.</p>
+  </section>
+
+  <section class="card">
+    <h2>Open Takumion</h2>
+    <div class="buttons">
+      <button id="open-desktop">Desktop app</button>
+      <button class="secondary" id="open-web">Web app</button>
+    </div>
+    <p class="muted small" id="notice"></p>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

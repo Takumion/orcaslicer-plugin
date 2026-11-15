@@ -1,0 +1,17 @@
+[project]
+name = "takumion-orca-link"
+version = "0.1.0"
+description = "Takumion Link: an OrcaSlicer 2.5+ plugin that puts bodies sent from Takumion on the plate."
+license = "AGPL-3.0-only"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

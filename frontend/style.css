@@ -1,0 +1,48 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+:root {
+  --bg: var(--orca-bg, #ffffff);
+  --fg: var(--orca-fg, #262e30);
+  --muted: var(--orca-muted, #6b7579);
+  --border: var(--orca-border, #dbdfe0);
+  --accent: var(--orca-accent, #009688);
+  --accent-fg: var(--orca-accent-fg, #ffffff);
+  --warn: #b26a00;
+  --ok: #2e7d32;
+}
+
+html, body { background: var(--bg); color: var(--fg); font-family: var(--orca-font, system-ui, sans-serif); font-size: 13px; }
+body { margin: 0; }
+main { max-width: 720px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+
+h1 { font-size: 18px; margin: 0; }
+h2 { font-size: 14px; margin: 0 0 8px; }
+p { margin: 0 0 8px; line-height: 1.45; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+.pill.ok { color: var(--ok); border-color: currentColor; }
+.pill.bad { color: var(--warn); border-color: currentColor; }
+
+.card { border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }
+.card.setup { border-color: var(--warn); }
+
+button { font: inherit; color: var(--accent-fg); background: var(--accent); border: 1px solid var(--accent);
+  border-radius: 4px; padding: 5px 14px; cursor: pointer; }
+button.secondary { color: var(--fg); background: transparent; border-color: var(--border); }
+button.link { color: var(--accent); background: none; border: none; padding: 0 4px; }
+.buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+
+.code { font-size: 32px; font-weight: 600; letter-spacing: .25em; font-variant-numeric: tabular-nums; margin: 4px 0; }
+
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--border); }
+.rows li:last-child { border-bottom: none; }
+.rows .name { font-weight: 600; overflow-wrap: anywhere; }
+.doc { margin-bottom: 8px; }
+.doc h3 { font-size: 13px; margin: 8px 0 2px; }
+.badge { border-radius: 3px; padding: 1px 6px; font-size: 11px; border: 1px solid var(--border); white-space: nowrap; }
+.badge.reload { color: var(--warn); border-color: currentColor; }
+.badge.on { color: var(--ok); border-color: currentColor; }
