@@ -176,7 +176,7 @@ def test_hosted_url_and_bad_config():
     assert checked_web_url(None) == WEB_URL
     assert checked_web_url("http://evil.example/") == WEB_URL, "plain http only on this computer"
     assert checked_web_url("http://127.0.0.1:5180/") == "http://127.0.0.1:5180/"
-    assert checked_web_url("https://staging.takumion.com/") == "https://staging.takumion.com/"
+    assert checked_web_url("https://cad.example.com/") == "https://cad.example.com/"
     assert Launcher("http://localhost:5180/").here_url("k") == "http://localhost:5180/?host=orca#orcaLinkKey=k"
 
 

@@ -8,7 +8,6 @@ written here.
 - **Plugin:** listens on loopback, writes the files, puts them on Orca's plate,
   tracks which plate objects are linked to which bodies.
 - **Takumion:** exports meshes, pairs once, sends.
-- **Design and decisions:** kept with Takumion (`plans/orca-slicer-link.md` in its repository).
 
 Two transports carry the same messages:
 
