@@ -20,7 +20,7 @@ from .protocol import APP, HANDOFF_WAIT_S, PROTOCOL, LinkError, Part, SendReques
 from .store import Link, LinkStore
 
 PROJECT_GRACE_S = 0.75
-SETUP_HINT = "Set Preferences › Load behavior → Load geometry only, so a 3MF from Takumion is added to the plate."
+SETUP_HINT = "Set Preferences › Load behavior to \"Load geometry only\", so a 3MF from Takumion is added to the plate."
 
 
 class Notifier(Protocol):
