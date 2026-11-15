@@ -186,6 +186,21 @@ or `{"type": "takumion-link", "id": 7, "error": {"code": "…", "message": "…"
 Methods: `hello`, `send`, `links`. No pairing: the plugin only ever navigates its
 own tab to the Takumion app.
 
+**Getting there and back.** The plugin's tab has an *Open Takumion here* button
+that navigates the tab to `<takumionUrl>?host=orca` (`takumionUrl` is the plugin's
+setting: `https://app.takumion.com/` by default, a local dev server while
+developing). Orca injects `window.orca` into the page after the navigation.
+Over the bridge, `hello`'s result carries one more, optional field:
+
+```json
+{"app": "takumion-orca-link", "protocol": 1, "…": "…", "tab": {"url": "http://127.0.0.1:47390/tab"}}
+```
+
+`GET /tab` on the loopback server serves the plugin's own tab page (static HTML,
+`Host`-checked like every endpoint, no data in it; its state comes over
+`window.orca`). The editor's "back to Takumion Link" navigates there. `tab` is
+optional and absent over HTTP, so it needs no protocol bump.
+
 ## 3MF and Orca's load behavior
 
 With Orca's default *Load behavior* (`ask_when_relevant`), a 3MF dropped on a
