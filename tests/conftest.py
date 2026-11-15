@@ -13,7 +13,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from link.atomic import write_json_atomic  # noqa: E402
 from link.handoff import Handoff, HandoffUnavailable  # noqa: E402
+from link.location import FilesLocation, location_file  # noqa: E402
 from link.plate import PlateObject, PlateWatch  # noqa: E402
 from link.service import LinkService  # noqa: E402
 from link.store import LinkStore, same_path  # noqa: E402
@@ -95,7 +97,11 @@ def world(data_dir: Path):
     fake = FakeOrca(plate)
     notes = Notes()
     store = LinkStore(data_dir / "takumion")
+    files = data_dir.parent / "Takumion files"
+    files.mkdir(parents=True, exist_ok=True)
+    write_json_atomic(location_file(data_dir), {"folder": str(files)})
+    location = FilesLocation(data_dir, home=data_dir.parent)
     handoff = Handoff(data_dir, fake.deliver, retry_for=0.2, retry_every=0.05)
-    service = LinkService(store=store, plate=plate, handoff=handoff, notifier=notes, plugin_version="0.1.0",
+    service = LinkService(store=store, plate=plate, handoff=handoff, notifier=notes, plugin_version="0.1.0", location=location,
                           wait_s=1.0, now=lambda: datetime(2026, 11, 15, 10, 50, 30))
-    return SimpleNamespace(service=service, store=store, plate=plate, orca=fake, notes=notes)
+    return SimpleNamespace(service=service, store=store, plate=plate, orca=fake, notes=notes, files=files, location=location)

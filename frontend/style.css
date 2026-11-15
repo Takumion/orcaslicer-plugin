@@ -55,3 +55,6 @@ button.link { color: var(--accent); background: none; border: none; padding: 0 4
 .badge.on { color: var(--ok); border-color: currentColor; }
 
 button:disabled { opacity: 0.45; cursor: not-allowed; }
+.row { display: flex; gap: 8px; align-items: center; }
+.row input { flex: 1; min-width: 0; }
+#location.needs { border-color: var(--warn); }

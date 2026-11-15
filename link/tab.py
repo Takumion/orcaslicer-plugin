@@ -23,6 +23,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .launcher import Launcher
+from .location import FilesLocation
 from .pairing import PairingBook
 from .server import LinkServer
 from .service import LinkService
@@ -37,10 +38,12 @@ class TabController:
     """Turns tab button presses into pairing / launcher / service calls."""
 
     def __init__(self, *, service: LinkService, pairing: PairingBook, server: LinkServer,
-                 launcher: Launcher, post: Post, bridge_key: str = "", log: Callable[[str], None] = print) -> None:
+                 launcher: Launcher, post: Post, bridge_key: str = "", log: Callable[[str], None] = print,
+                 location: FilesLocation | None = None) -> None:
         self.nonce = secrets.token_urlsafe(24)
         self._bridge_key = bridge_key
         self._present = False
+        self._location = location
         self._panel_post: Post | None = None
         self._service = service
         self._pairing = pairing
@@ -58,6 +61,7 @@ class TabController:
             "revoke": lambda msg: self._pairing.revoke_id(str(msg.get("id", ""))),
             "open-takumion": self._open,
             "dismiss-setup": lambda msg: self._service.dismiss_setup_card(),
+            "set-location": self._set_location,
         }
         pairing.subscribe(self.push)
         service.subscribe(self.push)
@@ -94,6 +98,18 @@ class TabController:
     def _leave(self, message: dict[str, Any]) -> None:
         """The page is about to navigate the tab away (to Takumion): stop pushing state."""
 
+    def _set_location(self, message: dict[str, Any]) -> None:
+        """*Save folder*: where Takumion's files go from OrcaSlicer's next start."""
+        if self._location is None:
+            return
+        try:
+            folder = self._location.choose(message.get("folder"))
+        except (OSError, ValueError) as exc:
+            self._notice = f"Folder not saved: {exc}"
+            return
+        self._notice = (f"Takumion's files go to {folder}." if not self._location.needs_restart else
+                        f"Saved. Restart OrcaSlicer to start using {folder}; OrcaSlicer asks once to allow it.")
+
     def _open(self, message: dict[str, Any]) -> None:
         try:
             self._notice = f"Opened {self._launcher.open(str(message.get('target', 'web')))}"
@@ -114,6 +130,7 @@ class TabController:
             "plateSeen": self._service.plate.seen,
             "notice": self._notice,
             "takumionHere": self._launcher.here_url(self._bridge_key),
+            "location": self._location.state() if self._location else None,
         }
 
     def push(self) -> None:

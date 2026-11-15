@@ -1,11 +1,13 @@
 """Which plate file belongs to which body (docs/slicer-link-protocol.md,
 "Files on disk").
 
-Layout under ``{data_dir}/takumion/``::
+The bookkeeping lives under ``{data_dir}/takumion/`` (``links.json``: doc ->
+body -> link). The mesh files go straight into the folder the user chose
+(``FilesLocation``), flat — Orca asks about every folder a plugin creates
+outside its data folder, so there are no subfolders::
 
-    links.json                                     doc -> body -> link
-    links/<docKey>/<bodyKey>/<name>.<fmt>          update mode, path fixed at first send
-    copies/<docKey>/<name>-<YYYYMMDD-HHMMSS>.<fmt> add mode
+    <Project> - <Body>.<fmt>                   update mode, path fixed at first send
+    <Project> - <Body> <YYYY-MM-DD HHMMSS>.<fmt>   add mode
 """
 
 from __future__ import annotations
@@ -19,27 +21,18 @@ from pathlib import Path
 
 from .atomic import read_json, write_json_atomic
 
-_UNSAFE = re.compile(r"[^A-Za-z0-9_.-]+")
-# Orca's sandbox refuses any path with one of these as a whole component.
-_ORCA_DENIED_COMPONENTS = frozenset({"secret", "secrets", "cert", "certs", "certificate", "certificates", "conf", "config"})
-
-
 # Windows refuses these as a file or folder name, with or without an extension.
 _WINDOWS_RESERVED = frozenset({"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))})
+# A readable file-name part: letters (any script), digits, space and _.-() kept.
+_UNREADABLE = re.compile(r"[^\w .()-]+")
 
 
-def folder_name(key: str) -> str:
-    """A protocol key as a folder name, prefixed with ``_`` when Orca's
-    sandbox would refuse it (``config``, ``secret``, …) or Windows would (``CON``, ``COM1``, …)."""
-    lowered = key.lower()
-    return f"_{key}" if lowered in _ORCA_DENIED_COMPONENTS or lowered in _WINDOWS_RESERVED else key
-
-
-def safe_name(name: str) -> str:
-    """A file-name stem from a body name: ASCII letters, digits, ``_.-`` only,
-    at most 60 characters, never empty, hidden or a Windows device name."""
-    stem = _UNSAFE.sub("_", name).strip("._")[:60] or "body"
-    return f"_{stem}" if stem.split(".")[0].lower() in _WINDOWS_RESERVED else stem
+def display_name(name: str, fallback: str) -> str:
+    """A project or body name as part of a file name a person reads: path and
+    shell characters become ``_``, at most 60 characters, never empty, hidden
+    or a Windows device name."""
+    part = _UNREADABLE.sub("_", name).strip(" ._")[:60].strip() or fallback
+    return f"_{part}" if part.split(".")[0].strip().lower() in _WINDOWS_RESERVED else part
 
 
 def same_path(a: str | os.PathLike[str], b: str | os.PathLike[str]) -> bool:
@@ -82,20 +75,31 @@ class LinkStore:
     def _save(self) -> None:
         write_json_atomic(self._file, {"version": 1, "docs": self._docs})
 
-    def link_path(self, doc_key: str, body_key: str, name: str, fmt: str) -> Path:
-        """Where a body's update-mode file lives; decided once, at its first send."""
-        return self.root / "links" / folder_name(doc_key) / folder_name(body_key) / f"{safe_name(name)}.{fmt}"
+    def link_path(self, folder: Path, doc_key: str, body_key: str, doc_name: str, name: str, fmt: str) -> Path:
+        """Where a body's update-mode file lives in ``folder``:
+        ``<Project> - <Body>.<fmt>``, with the body key's start added only when
+        another body (or another document of the same name) already has that
+        name. Decided once, at the body's first send."""
+        stem = f"{display_name(doc_name, 'Takumion')} - {display_name(name, 'Body')}"
+        candidate = folder / f"{stem}.{fmt}"
+        if self._taken(candidate, doc_key, body_key):
+            candidate = folder / f"{stem} ({body_key[:8]}).{fmt}"
+        return candidate
 
-    def copy_path(self, doc_key: str, name: str, fmt: str, now: datetime) -> Path:
-        """A fresh, time-stamped add-mode file that does not exist yet."""
-        folder = self.root / "copies" / folder_name(doc_key)
-        stem = f"{safe_name(name)}-{now:%Y%m%d-%H%M%S}"
+    def copy_path(self, folder: Path, doc_name: str, name: str, fmt: str, now: datetime) -> Path:
+        """A fresh, time-stamped add-mode file in ``folder`` that does not exist yet."""
+        stem = f"{display_name(doc_name, 'Takumion')} - {display_name(name, 'Body')} {now:%Y-%m-%d %H%M%S}"
         candidate = folder / f"{stem}.{fmt}"
         counter = 2
         while candidate.exists():
-            candidate = folder / f"{stem}-{counter}.{fmt}"
+            candidate = folder / f"{stem} {counter}.{fmt}"
             counter += 1
         return candidate
+
+    def _taken(self, path: Path, doc_key: str, body_key: str) -> bool:
+        """Whether ``path`` belongs to another body's link (case-insensitive, as Windows and macOS see it)."""
+        return any(same_path(link.path, path) or str(link.path).lower() == str(path).lower()
+                   for link in self.all_links() if (link.doc_key, link.body_key) != (doc_key, body_key))
 
     def get(self, doc_key: str, body_key: str) -> Link | None:
         """The body's link, if it has one."""

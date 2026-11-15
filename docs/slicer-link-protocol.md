@@ -77,12 +77,18 @@ All bodies are JSON, UTF-8. Mesh bytes travel as standard base64.
   "protocol": 1,
   "plugin": {"version": "0.1.0"},
   "orca": {"version": "2.5.1"},
-  "paired": false,
-  "setup": {"loadGeometryOnly": "unknown"}
+  "paired": true,
+  "setup": {"loadGeometryOnly": "unknown"},
+  "files": {"folder": "/home/me/Documents/Takumion", "ready": true, "needsRestart": false}
 }
 ```
 
 - `paired` is `true` when the request carries a valid token for its origin.
+- `files` — where the plugin writes Takumion's files — is present **only when
+  `paired` is `true`** (and always over the bridge): the folder path names the
+  computer's user. `ready` is `false` until a folder is in use; `needsRestart`
+  is `true` when a newly chosen folder waits for Orca's next start. A client
+  warns before sending while `ready` is `false` (see *Files on disk*).
 - `setup.loadGeometryOnly` is `"unknown"` until the plugin has seen a 3MF land
   as plain geometry (then `"confirmed"`) or open the dialog / the project
   (then `"missing"`). See [3MF](#3mf-and-orcas-load-behavior).
@@ -168,6 +174,7 @@ Revokes the caller's own token. → `204`.
 | 400 | `bad-request` | Malformed JSON, bad key, unknown `mode`/`format`, empty `parts` |
 | 401 | `unauthorized` | No token, or not valid for this origin |
 | 403 | `forbidden` | Wrong or expired pairing code |
+| 409 | `setup-needed` | No folder for Takumion's files is in use yet (or one waits for Orca's restart); `message` says what to do |
 | 413 | `too-large` | Body over the limit |
 | 421 | `bad-host` | `Host` is not loopback |
 | 503 | `orca-busy` | Orca is starting or the hand-off target is not ready; retry |
@@ -259,18 +266,34 @@ STL never meets the dialog.
 
 ## Files on disk
 
-Under Orca's data directory (the one place a plugin may write without asking):
+The meshes go into **one folder the user chooses** in the plugin's page (*Where
+Takumion keeps its files*; suggested `~/Documents/Takumion`). Until one is in
+use, `send` is refused with `setup-needed`. Orca's sandbox shapes the rest:
+
+- A plugin may ask for a whole folder only while Orca loads it, so a newly
+  chosen folder is used from Orca's **next start** (Orca asks once to allow it).
+- Orca asks about every folder a plugin creates outside its data folder and never
+  remembers the answer, so the plugin creates the chosen folder once, when it is
+  saved, and keeps the files in it **flat**:
 
 ```
-takumion/
-  pairings.json                        token hashes, origins, times
-  links.json                           doc → body → path, format, lastSent
-  links/<docKey>/<bodyKey>/<name>.<fmt>   update mode: path fixed at first send
-  copies/<docKey>/<name>-<YYYYMMDD-HHMMSS>.<fmt>   add mode
+<folder>/
+  <Project> - <Body>.<fmt>                     update mode: path fixed at first send
+  <Project> - <Body> <YYYY-MM-DD HHMMSS>.<fmt>  add mode
 ```
 
 A body's link path is decided at its first send and never changes, even if the
-body is renamed — *Reload from disk* follows the path.
+body is renamed — *Reload from disk* follows the path. When another body already
+owns a name, the body key's first 8 characters are added: `<Project> - <Body>
+(<key>).<fmt>`. A body linked before the folder changed gets a new file in the
+new folder at its next Update. The bookkeeping stays in Orca's data directory:
+
+```
+takumion/
+  pairings.json      token hashes, origins, times
+  links.json         doc → body → path, format, lastSent
+  location.json      the chosen folder
+```
 
 ## Versioning
 

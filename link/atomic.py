@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -13,15 +13,14 @@ from typing import Any
 def write_bytes_atomic(path: Path, data: bytes) -> None:
     """Write ``data`` to a sibling temp file, flush it to disk, then rename it
     over ``path`` in one step."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # A fresh temp name per write: two threads writing the same file never share one.
-    # Reopened by path, not os.fdopen: Orca's sandbox allows opening a path in its
-    # data folder silently, but asks the user about writing to a bare descriptor.
-    fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    os.close(fd)
-    tmp = Path(name)
+    if not path.parent.is_dir():
+        path.parent.mkdir(parents=True)
+    # A fresh temp name per write (two threads never share one), opened by path
+    # with "xb": Orca's sandbox counts that as a write to a path, which a folder
+    # grant covers. tempfile.mkstemp and os.fdopen would make Orca ask every time.
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(6)}.tmp")
     try:
-        with open(tmp, "wb") as handle:
+        with open(tmp, "xb") as handle:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())

@@ -207,6 +207,24 @@ def test_refresh_pushes_only_when_the_view_changes(world, tmp_path):
     assert len(posted) == base, "objects that are not linked do not change the view"
 
 
+def test_the_tab_saves_a_folder_and_says_a_restart_is_needed(world, data_dir, tmp_path):
+    panels = []
+    app, _ = make_app(world, data_dir, panels)
+    app.show_panel()
+    panel = panels[0]
+
+    def press(action, **extra):
+        panel.on_message({"type": "tab", "nonce": app.tab.nonce, "action": action, **extra})
+
+    press("set-location", folder=str(tmp_path / "config" / "x"))
+    assert "Folder not saved" in panel.posted[-1]["state"]["notice"]
+    target = tmp_path / "Prints"
+    press("set-location", folder=str(target))
+    state = panel.posted[-1]["state"]
+    assert target.is_dir() and state["location"]["saved"] == str(target)
+    assert state["location"]["needsRestart"] is True and "Restart OrcaSlicer" in state["notice"]
+
+
 class FakePanel:
     """What orca.host.ui.create_window returns, recording what reaches the page."""
 

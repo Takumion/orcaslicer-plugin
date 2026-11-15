@@ -25,6 +25,21 @@
     <button id="setup-done">Done</button>
   </section>
 
+  <section class="card" id="location">
+    <h2>Where Takumion keeps its files</h2>
+    <p id="location-now"></p>
+    <div id="location-edit">
+      <div class="row">
+        <input id="location-input" type="text" spellcheck="false" autocomplete="off" aria-label="Folder for Takumion's files">
+        <button id="location-save">Save folder</button>
+      </div>
+      <div class="buttons small" id="location-suggestions"></div>
+      <p class="muted small">One folder for every file sent from Takumion, named <i>Project - Body.stl</i>.
+        OrcaSlicer asks once, at its next start, to allow the plugin to write there.</p>
+    </div>
+    <button class="secondary" id="location-change" hidden>Change folder</button>
+  </section>
+
   <div class="cols">
   <div class="col">
   <section class="card">

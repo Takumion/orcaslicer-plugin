@@ -14,12 +14,15 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .atomic import read_json, write_bytes_atomic, write_json_atomic
+from .location import FilesLocation
 from .handoff import Handoff, HandoffUnavailable
 from .plate import ARRIVED, OPENED_AS_PROJECT, TIMED_OUT, PlateWatch
 from .protocol import APP, HANDOFF_WAIT_S, PROTOCOL, LinkError, Part, SendRequest, check_key
 from .store import Link, LinkStore
 
 PROJECT_GRACE_S = 0.75
+SETUP_FOLDER = ("Choose where Takumion keeps its files first: open Takumion Link in OrcaSlicer "
+                "(in Takumion: Settings › Slicer › Open Takumion Link) and pick a folder.")
 SETUP_HINT = "Set Preferences › Load behavior to \"Load geometry only\", so a 3MF from Takumion is added to the plate."
 
 
@@ -45,9 +48,10 @@ class LinkService:
     """Sends bodies to the plate and keeps their links; thread-safe."""
 
     def __init__(self, *, store: LinkStore, plate: PlateWatch, handoff: Handoff, notifier: Notifier,
-                 plugin_version: str, wait_s: float = HANDOFF_WAIT_S,
+                 plugin_version: str, location: FilesLocation, wait_s: float = HANDOFF_WAIT_S,
                  now: Callable[[], datetime] = lambda: datetime.now()) -> None:
         self.store = store
+        self.location = location
         self.plate = plate
         self._handoff = handoff
         self._notifier = notifier
@@ -101,8 +105,9 @@ class LinkService:
     # ------------------------------------------------------------- messages
 
     def hello(self, paired: bool) -> dict[str, Any]:
-        """``GET /v1/hello``."""
-        return {
+        """``GET /v1/hello``. ``files`` (where Takumion's files go) only for a
+        paired caller: the folder path names this computer's user."""
+        answer: dict[str, Any] = {
             "app": APP,
             "protocol": PROTOCOL,
             "plugin": {"version": self.plugin_version},
@@ -110,6 +115,11 @@ class LinkService:
             "paired": paired,
             "setup": {"loadGeometryOnly": self._setup},
         }
+        if paired:
+            active = self.location.active
+            answer["files"] = {"folder": str(active) if active else None, "ready": active is not None,
+                               "needsRestart": self.location.needs_restart}
+        return answer
 
     def links(self, doc_key: Any) -> dict[str, Any]:
         """``GET /v1/links?doc=<key>``."""
@@ -130,12 +140,19 @@ class LinkService:
     def send(self, request: SendRequest) -> dict[str, Any]:
         """``POST /v1/send``: write every part, hand the new ones to Orca one
         file per message, then wait (shared 5 s) to see them arrive."""
+        folder = self.location.active
+        if folder is None:
+            restart = self.location.needs_restart
+            message = (f"Restart OrcaSlicer to start using {self.location.saved} for Takumion's files "
+                       "(OrcaSlicer asks once to allow it)." if restart else SETUP_FOLDER)
+            self._notifier.notify("warning", f"Takumion: {message}")
+            raise LinkError("setup-needed", message)
         with self._send_lock:
             handed: list[_Handed] = []
             results: dict[str, dict[str, Any]] = {}
             for part in request.parts:
                 try:
-                    outcome = self._prepare(request, part)
+                    outcome = self._prepare(request, part, folder)
                 except OSError as exc:
                     # The OS reason only: the path names this computer's user.
                     outcome = _failed(part, f"Could not write the file ({exc.strerror or type(exc).__name__}).")
@@ -149,19 +166,22 @@ class LinkService:
 
     # ----------------------------------------------------------------- send
 
-    def _prepare(self, request: SendRequest, part: Part) -> dict[str, Any] | _Handed:
-        """Write one part; return its finished result, or what still needs handing off."""
+    def _prepare(self, request: SendRequest, part: Part, folder: Path) -> dict[str, Any] | _Handed:
+        """Write one part into ``folder``; return its finished result, or what still needs handing off."""
         if request.mode == "add":
-            path = self.store.copy_path(request.doc_key, part.name, request.format, self._now())
+            path = self.store.copy_path(folder, request.doc_name, part.name, request.format, self._now())
             write_bytes_atomic(path, part.data)
             return _Handed(part, path)
-        return self._prepare_update(request, part)
+        return self._prepare_update(request, part, folder)
 
-    def _prepare_update(self, request: SendRequest, part: Part) -> dict[str, Any] | _Handed:
+    def _prepare_update(self, request: SendRequest, part: Part, folder: Path) -> dict[str, Any] | _Handed:
         link = self.store.get(request.doc_key, part.body_key)
         if link is not None and link.format != request.format:
             link = None  # a different file type needs its own file
-        path = Path(link.path) if link else self.store.link_path(request.doc_key, part.body_key, part.name, request.format)
+        if link is not None and not _inside(link.path, folder):
+            link = None  # linked before the folder changed: the body gets a file in the new folder
+        path = Path(link.path) if link else self.store.link_path(folder, request.doc_key, part.body_key,
+                                                                  request.doc_name, part.name, request.format)
         digest = hashlib.sha256(part.data).hexdigest()
         changed = link is None or link.sha256 != digest or not path.exists()
         if changed:
@@ -248,9 +268,15 @@ class LinkService:
             names = ", ".join(link.name for link in dropped)
             self._notifier.notify("warning", f"Takumion: Orca opened {names} as its project. Use File › Save Project As "
                                              f"to keep it; the next send from Takumion writes a new file. {SETUP_HINT}")
-        elif event == "ProjectBeforeSave" and _inside(project, self.store.root):
+        elif event == "ProjectBeforeSave" and self._is_link_file(project):
             self._notifier.notify("warning", "Takumion: this project is a Takumion link file. Use File › Save Project As "
                                              "so the next send does not overwrite it.")
+
+
+    def _is_link_file(self, path: str) -> bool:
+        """Whether ``path`` is a file this plugin wrote (the chosen folder, or the old data-folder layout)."""
+        folder = self.location.active
+        return _inside(path, self.store.root) or (folder is not None and _inside(path, folder))
 
 
 def _failed(part: Part, message: str) -> dict[str, Any]:

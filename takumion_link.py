@@ -18,6 +18,7 @@ and plate files, and the hand-off that puts files on the plate. Protocol:
 """
 
 import json
+import os
 import sys
 import time
 import traceback
@@ -26,6 +27,7 @@ from typing import Any
 from link.app import LinkApp
 from link.handoff_linux import touch_bus
 from link.launcher import WEB_URL
+from link.location import saved_folder
 from link.orca_host import OrcaNotifier, data_dir_for, event_name, orca_version, refresh_plate
 from link.page import render_page
 from link.protocol import LOOPBACK, PORTS
@@ -43,11 +45,17 @@ def log(message: str) -> None:
     print(f"[takumion-link] {message}", flush=True)
 
 
-def permissions() -> dict[str, Any]:
+def permissions(folder: Any = None) -> dict[str, Any]:
     """What the plugin asks for once, at load: the loopback ports it may
-    listen on, and threads. The Linux session bus is not asked for here (see
-    ``touch_bus``): Orca would ask about a socket path again on every start."""
-    return {"network_socket": [repr((LOOPBACK, port)) for port in PORTS], "threading": True}
+    listen on, threads, and the folder the user chose for Takumion's files
+    (the whole folder, ``<folder>/*``: Orca grants a folder only at load, so a
+    newly chosen one is asked for at the next start). The Linux session bus is
+    not asked for here (see ``touch_bus``): Orca would ask about a socket path
+    again on every start."""
+    wanted: dict[str, Any] = {"network_socket": [repr((LOOPBACK, port)) for port in PORTS], "threading": True}
+    if folder is not None:
+        wanted["fs_readwrite"] = [os.path.join(str(folder), "*")]
+    return wanted
 
 
 if orca is not None and hasattr(orca, "pages"):
@@ -174,7 +182,7 @@ if orca is not None and hasattr(orca, "pages"):
         """The plugin package: asks for its permissions and registers the tab."""
 
         def register_capabilities(self) -> None:
-            orca.request_permissions(**permissions())
+            orca.request_permissions(**permissions(saved_folder(data_dir_for(__file__))))
             orca.register_capability(TakumionTab)
 
 elif orca is not None:

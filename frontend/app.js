@@ -145,8 +145,34 @@
     );
   }
 
+  // Where Takumion's files go. Sends wait until a folder is in use; a newly
+  // saved one is used after OrcaSlicer restarts (Orca allows a folder at load).
+  let locationEditing = false;
+  function renderLocation(loc) {
+    const card = $("location");
+    if (!loc) { card.hidden = true; return; }
+    const ready = !!loc.active && !loc.needsRestart;
+    card.classList.toggle("needs", !loc.active || loc.needsRestart);
+    $("location-now").textContent = loc.needsRestart
+      ? `Restart OrcaSlicer to start using ${loc.saved}. OrcaSlicer asks once to allow it.`
+      : loc.active ? `Files go to ${loc.active}` : "Choose a folder first: Takumion's sends wait until one is set.";
+    const editing = !ready || locationEditing;
+    $("location-edit").hidden = !editing;
+    $("location-change").hidden = editing;
+    const input = $("location-input");
+    if (document.activeElement !== input && !input.value) input.value = loc.saved || loc.active || (loc.suggestions || [])[0] || "";
+    const chips = $("location-suggestions");
+    chips.replaceChildren();
+    for (const folder of loc.suggestions || []) {
+      const chip = el("button", "secondary", folder);
+      chip.addEventListener("click", () => { input.value = folder; input.focus(); });
+      chips.append(chip);
+    }
+  }
+
   function render(state) {
     latest = state;
+    renderLocation(state.location);
     if (openTakumion && state.takumionHere) openTakumionWhenUp(state.takumionHere);
     $("open-here").textContent = `In this tab (${hostOf(state.takumionHere)})`;
     renderStatus(state);
@@ -164,6 +190,8 @@
   }
 
   $("pair").addEventListener("click", () => post("pair"));
+  $("location-save").addEventListener("click", () => { locationEditing = false; post("set-location", {folder: $("location-input").value}); });
+  $("location-change").addEventListener("click", () => { locationEditing = true; if (latest) render(latest); });
   $("pair-cancel").addEventListener("click", () => post("cancel-pair"));
   $("setup-done").addEventListener("click", () => post("dismiss-setup"));
   $("open-here").addEventListener("click", () => { if (latest && latest.takumionHere) leaveTo(inThisTab(latest.takumionHere)); });

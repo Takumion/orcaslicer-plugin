@@ -15,6 +15,7 @@ from . import __version__
 from .bridge import Bridge
 from .handoff import Handoff
 from .launcher import WEB_URL, Launcher
+from .location import FilesLocation
 from .page import render_page
 from .pairing import PairingBook
 from .plate import PlateWatch
@@ -45,13 +46,15 @@ class LinkApp:
         self.store = LinkStore(root)
         self.pairing = PairingBook(root / "pairings.json")
         self.plate = PlateWatch()
+        self.location = FilesLocation(data_dir)
         self.service = LinkService(store=self.store, plate=self.plate, handoff=handoff or Handoff(data_dir),
-                                   notifier=notifier, plugin_version=__version__, wait_s=wait_s)
+                                   notifier=notifier, plugin_version=__version__, location=self.location, wait_s=wait_s)
         bridge_key = secrets.token_urlsafe(24)
         self.server = LinkServer(self.service, self.pairing, ports, log, page=self.page)
         self.bridge = Bridge(self.service, post, self.tab_url, key=bridge_key, log=log, show_panel=self.show_panel)
         self.tab = TabController(service=self.service, pairing=self.pairing, server=self.server,
-                                 launcher=launcher or Launcher(web_url), post=post, bridge_key=bridge_key, log=log)
+                                 launcher=launcher or Launcher(web_url), post=post, bridge_key=bridge_key, log=log,
+                                 location=self.location)
 
     def page(self, head_extra: str = "", open_takumion: bool = False, panel: bool = False) -> str:
         """The tab's page, carrying this load's tab nonce; ``open_takumion``

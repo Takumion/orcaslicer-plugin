@@ -28,6 +28,7 @@ _STATUS = {
     "bad-host": 421,
     "internal": 500,
     "orca-busy": 503,
+    "setup-needed": 409,
 }
 
 UNPAIRED_MESSAGE = "Pair this app in Orca's Takumion tab first."

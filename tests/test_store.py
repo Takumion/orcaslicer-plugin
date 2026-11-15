@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from link.atomic import read_json, write_bytes_atomic
-from link.store import Link, LinkStore, folder_name, safe_name
+from link.store import Link, LinkStore, display_name
 
 
 def link(root, body="body_1", **over):
@@ -11,23 +11,33 @@ def link(root, body="body_1", **over):
     return Link(**base)
 
 
-def test_layout(tmp_path):
-    store = LinkStore(tmp_path)
-    assert store.link_path("prj_1", "body_1", "Base plate", "3mf") == tmp_path / "links/prj_1/body_1/Base_plate.3mf"
+def test_flat_readable_layout_in_the_chosen_folder(tmp_path):
+    store, files = LinkStore(tmp_path / "meta"), tmp_path / "Takumion"
+    assert store.link_path(files, "prj_1", "body_1", "Bracket v2", "Base plate", "3mf") == files / "Bracket v2 - Base plate.3mf"
     now = datetime(2026, 11, 15, 10, 50, 30)
-    first = store.copy_path("prj_1", "Lid", "stl", now)
-    assert first == tmp_path / "copies/prj_1/Lid-20261115-105030.stl"
+    first = store.copy_path(files, "Bracket", "Lid", "stl", now)
+    assert first == files / "Bracket - Lid 2026-11-15 105030.stl"
     write_bytes_atomic(first, b"x")
-    assert store.copy_path("prj_1", "Lid", "stl", now).name == "Lid-20261115-105030-2.stl"
+    assert store.copy_path(files, "Bracket", "Lid", "stl", now).name == "Bracket - Lid 2026-11-15 105030 2.stl"
 
 
-def test_names_are_safe_for_orca():
-    assert safe_name("../../etc/passwd") == "etc_passwd"
-    assert safe_name("Деталь") == "body"
-    assert safe_name(".hidden") == "hidden"
-    assert len(safe_name("x" * 200)) == 60
-    assert folder_name("config") == "_config" and folder_name("Secret") == "_Secret"
-    assert folder_name("body_1") == "body_1"
+def test_a_name_another_body_owns_gets_its_key(tmp_path):
+    store, files = LinkStore(tmp_path / "meta"), tmp_path / "Takumion"
+    store.put(link(tmp_path, "body_aaaaaaaa1", path=str(files / "Untitled - Body 1.stl")))
+    assert store.link_path(files, "prj_1", "body_aaaaaaaa1", "Untitled", "Body 1", "stl") == files / "Untitled - Body 1.stl"
+    assert store.link_path(files, "prj_2", "body_bbbbbbbb2", "Untitled", "Body 1", "stl") == files / "Untitled - Body 1 (body_bbb).stl"
+    assert store.link_path(files, "prj_2", "body_c", "untitled", "body 1", "stl").name == "untitled - body 1 (body_c).stl", \
+        "case-only differences collide on Windows and macOS"
+
+
+def test_names_read_well_and_stay_safe():
+    assert display_name("../../etc/passwd", "Body") == "etc_passwd"
+    assert display_name("Деталь 1", "Body") == "Деталь 1", "any script stays readable"
+    assert display_name(".hidden", "Body") == "hidden"
+    assert display_name("a/b:c*d", "Body") == "a_b_c_d"
+    assert display_name("   ", "Body") == "Body"
+    assert len(display_name("x" * 200, "Body")) == 60
+    assert display_name("CON", "Body") == "_CON" and display_name("com1.part", "Body") == "_com1.part"
 
 
 def test_put_get_persist(tmp_path):

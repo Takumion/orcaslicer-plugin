@@ -24,7 +24,7 @@ def test_first_update_adds_and_links(world):
     assert result == {"bodyKey": "body_1", "action": "added", "onPlate": True, "reloadNeeded": False}
     link = world.store.get("prj_1", "body_1")
     assert Path(link.path).read_bytes() == b"v1"
-    assert link.path.endswith("takumion/links/prj_1/body_1/Base.stl")
+    assert link.path == str(world.files / "Bracket - Base.stl"), "flat and readable, in the chosen folder"
     assert world.orca.delivered == [link.path]
 
 
@@ -80,7 +80,7 @@ def test_add_writes_a_new_copy_each_time(world):
     two = only(send(world, mode="add"))
     assert one["action"] == two["action"] == "added"
     assert len(set(world.orca.delivered)) == 2
-    assert all("/copies/prj_1/Base-20261115-105030" in p for p in world.orca.delivered)
+    assert all(p.startswith(str(world.files / "Bracket - Base 2026-11-15 105030")) for p in world.orca.delivered)
     assert world.store.get("prj_1", "body_1") is None, "add mode is never linked"
 
 
@@ -146,3 +146,34 @@ def test_links_and_docs(world):
     assert world.service.docs()[0]["key"] == "prj_1"
     with pytest.raises(LinkError):
         world.service.links(None)
+
+
+def test_no_folder_yet_refuses_the_send_and_says_where_to_set_it(world):
+    from link.protocol import LinkError
+
+    world.location.active = world.location.saved = None
+    try:
+        send(world)
+    except LinkError as error:
+        assert error.code == "setup-needed" and "Open Takumion Link" in error.message
+    else:
+        raise AssertionError("a send with no folder must be refused")
+    assert world.orca.delivered == [] and "choose where" in world.notes.items[-1][1].lower()
+    world.location.saved = world.files / "elsewhere"
+    try:
+        send(world)
+    except LinkError as error:
+        assert error.code == "setup-needed" and "Restart OrcaSlicer" in error.message
+    assert world.service.hello(False).get("files") is None, "an unpaired caller never sees the folder (it names the user)"
+    assert world.service.hello(True)["files"] == {"folder": None, "ready": False, "needsRestart": True}
+
+
+def test_a_body_linked_before_the_folder_changed_gets_a_file_in_the_new_folder(world, tmp_path):
+    send(world)
+    old = world.store.get("prj_1", "body_1").path
+    moved = tmp_path / "New place"
+    moved.mkdir()
+    world.location.active = world.location.saved = moved
+    result = only(send(world, parts=(("body_1", "Base", b"v2"),)))
+    link = world.store.get("prj_1", "body_1")
+    assert result["action"] == "added" and link.path == str(moved / "Bracket - Base.stl") and link.path != old
