@@ -21,14 +21,21 @@ class Bridge:
     """Answers bridge messages; ``send`` runs on a worker thread because it
     waits for Orca's UI thread to show the new objects."""
 
-    def __init__(self, service: LinkService, post: Post) -> None:
+    def __init__(self, service: LinkService, post: Post, tab_url: Callable[[], str | None] = lambda: None) -> None:
         self._service = service
         self._post = post
+        self._tab_url = tab_url
         self._methods: dict[str, Callable[[Any], dict[str, Any]]] = {
-            "hello": lambda params: service.hello(True),
+            "hello": lambda params: self._hello(),
             "links": lambda params: service.links((params or {}).get("doc")),
             "send": lambda params: service.send(parse_send(params)),
         }
+
+    def _hello(self) -> dict[str, Any]:
+        """``hello`` plus, when the link server runs, where the tab's own page
+        is served — Takumion navigates there to get back to it."""
+        url = self._tab_url()
+        return self._service.hello(True) | ({"tab": {"url": url}} if url else {})
 
     @staticmethod
     def handles(message: Any) -> bool:

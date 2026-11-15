@@ -16,11 +16,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from .page import render_page
 from .pairing import PairingBook
 from .protocol import LOOPBACK, MAX_BODY_BYTES, PORTS, UNPAIRED_MESSAGE, LinkError, parse_pair, parse_send
 from .service import LinkService
 
-_OPEN_PATHS = frozenset({"/v1/hello", "/v1/pair"})
+_OPEN_PATHS = frozenset({"/v1/hello", "/v1/pair", "/tab"})
 _ALLOW_HEADERS = "Authorization, Content-Type"
 _ALLOW_METHODS = "GET, POST, DELETE"
 
@@ -187,6 +188,17 @@ class _LinkHandler(BaseHTTPRequestHandler):
         self.link.pairing.revoke_token(self._token() or "")
         self._reply(204)
 
+    def _tab(self) -> None:
+        """The Orca tab's page, so Takumion shown in the tab can navigate back
+        to it. Static; its state arrives over ``window.orca``."""
+        data = render_page().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _send(self) -> None:
         self._reply(200, self.link.service.send(parse_send(self._read_json())))
 
@@ -200,6 +212,7 @@ class _LinkHandler(BaseHTTPRequestHandler):
         ("DELETE", "/v1/pair"): _unpair,
         ("POST", "/v1/send"): _send,
         ("GET", "/v1/links"): _links,
+        ("GET", "/tab"): _tab,
     }
 
     # -------------------------------------------------------------- methods

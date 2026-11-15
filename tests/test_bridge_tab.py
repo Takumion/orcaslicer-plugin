@@ -87,3 +87,22 @@ def test_tab_state_shows_server_and_setup(world, tmp_path):
         assert "Could not open" in posted[-1]["state"]["notice"]
     finally:
         server.stop()
+
+
+def test_hosted_url_and_bad_config():
+    from link.launcher import WEB_URL, checked_web_url, hosted_url
+
+    assert hosted_url("http://localhost:5180/") == "http://localhost:5180/?host=orca"
+    assert hosted_url("https://app.takumion.com/?project=p&host=x") == "https://app.takumion.com/?project=p&host=orca"
+    assert checked_web_url("javascript:alert(1)") == WEB_URL
+    assert checked_web_url(None) == WEB_URL
+    assert Launcher("http://localhost:5180/").here_url == "http://localhost:5180/?host=orca"
+
+
+def test_bridge_hello_names_the_tab_page(world):
+    posted = []
+    Bridge(world.service, posted.append, lambda: "http://127.0.0.1:47390/tab").handle(
+        {"type": "takumion-link", "id": 1, "method": "hello"})
+    assert posted[-1]["result"]["tab"] == {"url": "http://127.0.0.1:47390/tab"}
+    Bridge(world.service, posted.append).handle({"type": "takumion-link", "id": 2, "method": "hello"})
+    assert "tab" not in posted[-1]["result"]

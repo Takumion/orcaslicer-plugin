@@ -76,6 +76,7 @@ def make_fake_orca(version: str = "2.5.1") -> types.ModuleType:
     orca.notifications = []
     orca.plater_obj = FakePlater()
     orca.LifecycleEvent = LifecycleEvent
+    orca.config = "{}"
 
     class PagesPluginCapabilityBase:
         def __init__(self) -> None:
@@ -83,6 +84,9 @@ def make_fake_orca(version: str = "2.5.1") -> types.ModuleType:
 
         def post_message(self, data: Any) -> None:
             self.posted.append(data)
+
+        def get_config(self) -> str:
+            return orca.config
 
     class base:  # noqa: N801 - Orca's name
         def register_capabilities(self) -> None:

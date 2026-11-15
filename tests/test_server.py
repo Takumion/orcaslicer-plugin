@@ -193,3 +193,15 @@ def test_all_ports_taken(world, tmp_path):
         assert "in use" in server.error
     finally:
         blocker.close()
+
+
+def test_tab_page_is_served_without_pairing(served):
+    server, _ = served
+    conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=10)
+    conn.request("GET", "/tab", headers={"Host": f"127.0.0.1:{server.port}"})
+    reply = conn.getresponse()
+    html = reply.read().decode()
+    conn.close()
+    assert reply.status == 200 and reply.getheader("Content-Type").startswith("text/html")
+    assert "Takumion Link" in html and "<script>" in html
+    assert request(server, "GET", "/tab", host="evil.example:1")[0] == 421

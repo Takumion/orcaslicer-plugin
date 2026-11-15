@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 WEB_URL = "https://app.takumion.com/"
 DESKTOP_URL = "takumion://open"
@@ -26,12 +27,32 @@ def open_url(url: str) -> None:
     subprocess.Popen([opener, url], start_new_session=True)  # noqa: S603 - fixed argv
 
 
+def checked_web_url(url: object) -> str:
+    """``url`` when it is an http(s) URL with a host, else the default web app."""
+    parts = urlsplit(url) if isinstance(url, str) else None
+    return url if parts and parts.scheme in ("http", "https") and parts.netloc else WEB_URL
+
+
+def hosted_url(url: str) -> str:
+    """The web app as a page inside Orca's tab: ``url`` with ``host=orca``."""
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k != "host"] + [("host", "orca")]
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 class Launcher:
-    """Knows the two Takumion targets and opens one."""
+    """Knows the Takumion targets: the desktop app, the web app in the
+    browser, and the web app inside Orca's own tab."""
 
     def __init__(self, web_url: str = WEB_URL, opener: Callable[[str], None] = open_url) -> None:
-        self.targets = {"web": web_url, "desktop": DESKTOP_URL}
+        self.web_url = checked_web_url(web_url)
+        self.targets = {"web": self.web_url, "desktop": DESKTOP_URL}
         self._opener = opener
+
+    @property
+    def here_url(self) -> str:
+        """Where *Open Takumion here* navigates the tab."""
+        return hosted_url(self.web_url)
 
     def open(self, target: str) -> str:
         """Open ``"web"`` or ``"desktop"``; returns the URL opened."""

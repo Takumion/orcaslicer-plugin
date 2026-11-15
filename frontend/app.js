@@ -6,6 +6,7 @@
 
   const $ = (id) => document.getElementById(id);
   let codeTimer = null;
+  let latest = null;
 
   function post(action, extra) {
     if (window.orca && window.orca.postMessage) window.orca.postMessage(Object.assign({type: "tab", action}, extra || {}));
@@ -88,6 +89,7 @@
   }
 
   function render(state) {
+    latest = state;
     renderStatus(state);
     renderCode(state.code);
     renderPairings(state.pairings || []);
@@ -105,6 +107,7 @@
   $("pair").addEventListener("click", () => post("pair"));
   $("pair-cancel").addEventListener("click", () => post("cancel-pair"));
   $("setup-done").addEventListener("click", () => post("dismiss-setup"));
+  $("open-here").addEventListener("click", () => { if (latest && latest.takumionHere) location.assign(latest.takumionHere); });
   $("open-desktop").addEventListener("click", () => post("open-takumion", {target: "desktop"}));
   $("open-web").addEventListener("click", () => post("open-takumion", {target: "web"}));
   post("ready");

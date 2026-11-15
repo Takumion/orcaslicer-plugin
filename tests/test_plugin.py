@@ -90,6 +90,8 @@ def test_load_serve_refresh_unload(plugin, monkeypatch):
     tab.on_lifecycle_event(LifecycleEvent.ObjectAdded, None)
     assert app.plate.on_plate(linked)
 
+    assert tab.posted[-1]["state"]["takumionHere"] == "https://app.takumion.com/?host=orca"
+
     tab.on_message(json.dumps({"type": "tab", "action": "pair"}))
     assert tab.posted[-1]["type"] == "tab-state" and tab.posted[-1]["state"]["code"]
 

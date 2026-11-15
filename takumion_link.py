@@ -17,12 +17,14 @@ and plate files, and the hand-off that puts files on the plate. Protocol:
 ``docs/slicer-link-protocol.md``.
 """
 
+import json
 import sys
 import traceback
 from typing import Any
 
 from link.app import LinkApp
 from link.handoff_linux import touch_bus
+from link.launcher import WEB_URL
 from link.orca_host import OrcaNotifier, data_dir_for, event_name, orca_version, refresh_plate
 from link.page import render_page
 from link.protocol import LOOPBACK, PORTS
@@ -61,10 +63,20 @@ if orca is not None and hasattr(orca, "pages"):
         def get_icon(self) -> str:
             return ""
 
+        def get_default_config(self) -> dict[str, str]:
+            """Orca's Config tab: which Takumion *Open Takumion* opens."""
+            return {"takumionUrl": WEB_URL}
+
+        def _takumion_url(self) -> str:
+            try:
+                return str(json.loads(self.get_config() or "{}").get("takumionUrl") or WEB_URL)
+            except (ValueError, AttributeError):
+                return WEB_URL
+
         def on_load(self) -> None:
             try:
                 self.app = LinkApp(data_dir_for(__file__), notifier=OrcaNotifier(orca, log),
-                                   post=self.post_message, log=log)
+                                   post=self.post_message, web_url=self._takumion_url(), log=log)
                 self.app.start()
             except Exception:  # noqa: BLE001 - never take Orca down
                 log("load failed:\n" + traceback.format_exc())

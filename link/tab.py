@@ -75,6 +75,7 @@ class TabController:
             "setup": self._service.setup(),
             "plateSeen": self._service.plate.seen,
             "notice": self._notice,
+            "takumionHere": self._launcher.here_url,
         }
 
     def push(self) -> None:

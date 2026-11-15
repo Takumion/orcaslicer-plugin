@@ -13,10 +13,10 @@ from typing import Any
 from . import __version__
 from .bridge import Bridge
 from .handoff import Handoff
-from .launcher import Launcher
+from .launcher import WEB_URL, Launcher
 from .pairing import PairingBook
 from .plate import PlateWatch
-from .protocol import HANDOFF_WAIT_S, PORTS
+from .protocol import HANDOFF_WAIT_S, LOOPBACK, PORTS
 from .server import LinkServer
 from .service import LinkService, Notifier
 from .store import LinkStore
@@ -31,7 +31,8 @@ class LinkApp:
 
     def __init__(self, data_dir: Path, *, notifier: Notifier, post: Post, handoff: Handoff | None = None,
                  launcher: Launcher | None = None, ports: tuple[int, ...] = PORTS,
-                 wait_s: float = HANDOFF_WAIT_S, log: Callable[[str], None] = print) -> None:
+                 wait_s: float = HANDOFF_WAIT_S, web_url: str = WEB_URL,
+                 log: Callable[[str], None] = print) -> None:
         root = data_dir / "takumion"
         self.log = log
         self.store = LinkStore(root)
@@ -40,9 +41,14 @@ class LinkApp:
         self.service = LinkService(store=self.store, plate=self.plate, handoff=handoff or Handoff(data_dir),
                                    notifier=notifier, plugin_version=__version__, wait_s=wait_s)
         self.server = LinkServer(self.service, self.pairing, ports, log)
-        self.bridge = Bridge(self.service, post)
+        self.bridge = Bridge(self.service, post, self.tab_url)
         self.tab = TabController(service=self.service, pairing=self.pairing, server=self.server,
-                                 launcher=launcher or Launcher(), post=post, log=log)
+                                 launcher=launcher or Launcher(web_url), post=post, log=log)
+
+    def tab_url(self) -> str | None:
+        """The tab page on the link server, while it runs."""
+        port = self.server.port
+        return f"http://{LOOPBACK}:{port}/tab" if port else None
 
     def start(self) -> None:
         """Start listening; a failure is shown in the tab, not raised into Orca."""
