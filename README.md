@@ -39,8 +39,9 @@ plugin's Config tab to start on the plugin's page in the tab instead.
 
 *Open Takumion* can show Takumion **in this tab** (no pairing: it talks to the
 plugin over Orca's page bridge, with a key only the page the plugin opened
-knows), or open the desktop or web app; opening an app asks once more, the
-first time, to run the system's URL opener. The web address is the
+knows), or open the web app (the *Desktop app* button is disabled until the desktop
+app is released); opening it asks once more, the first time, to run the
+system's URL opener. The web address is the
 `takumionUrl` setting in the plugin's Config tab in Orca (default
 `https://app.takumion.com/`; plain `http` only for `localhost` /
 `127.0.0.1`, e.g. a local Takumion dev server).

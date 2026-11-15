@@ -53,3 +53,5 @@ button.link { color: var(--accent); background: none; border: none; padding: 0 4
 .badge { border-radius: 3px; padding: 1px 6px; font-size: 11px; border: 1px solid var(--border); white-space: nowrap; }
 .badge.reload { color: var(--warn); border-color: currentColor; }
 .badge.on { color: var(--ok); border-color: currentColor; }
+
+button:disabled { opacity: 0.45; cursor: not-allowed; }
