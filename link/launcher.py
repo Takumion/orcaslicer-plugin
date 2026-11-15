@@ -15,6 +15,10 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 WEB_URL = "https://app.takumion.com/"
 DESKTOP_URL = "takumion://open"
+# Takumion's local dev servers. The tab offers them in *Open Takumion › In
+# this tab* only when one answers (probed from the page, so the plugin itself
+# asks Orca for no extra network access).
+DEV_URLS = ("http://localhost:5174/", "http://localhost:5180/")
 
 
 def open_url(url: str) -> None:
@@ -53,6 +57,13 @@ class Launcher:
     def here_url(self) -> str:
         """Where *Open Takumion here* navigates the tab."""
         return hosted_url(self.web_url)
+
+    @property
+    def dev_targets(self) -> list[dict[str, str]]:
+        """Local dev servers the tab may offer next to the web app: ``probe``
+        is what the page checks, ``url`` where it then navigates."""
+        return [{"label": urlsplit(url).netloc, "probe": url, "url": hosted_url(url)}
+                for url in DEV_URLS if url.rstrip("/") != self.web_url.rstrip("/")]
 
     def open(self, target: str) -> str:
         """Open ``"web"`` or ``"desktop"``; returns the URL opened."""

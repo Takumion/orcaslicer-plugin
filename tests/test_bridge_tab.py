@@ -99,6 +99,13 @@ def test_hosted_url_and_bad_config():
     assert Launcher("http://localhost:5180/").here_url == "http://localhost:5180/?host=orca"
 
 
+def test_dev_targets_skip_the_configured_url():
+    assert [t["label"] for t in Launcher().dev_targets] == ["localhost:5174", "localhost:5180"]
+    assert Launcher().dev_targets[1] == {"label": "localhost:5180", "probe": "http://localhost:5180/",
+                                         "url": "http://localhost:5180/?host=orca"}
+    assert [t["label"] for t in Launcher("http://localhost:5180").dev_targets] == ["localhost:5174"]
+
+
 def test_bridge_hello_names_the_tab_page(world):
     posted = []
     Bridge(world.service, posted.append, lambda: "http://127.0.0.1:47390/tab").handle(

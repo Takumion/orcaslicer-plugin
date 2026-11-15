@@ -35,7 +35,9 @@ loopback protocol: [`docs/slicer-link-protocol.md`](docs/slicer-link-protocol.md
 plugin over Orca's page bridge), or open the desktop or web app; opening an app
 asks once more, the first time, to run the system's URL opener. The web address
 is the `takumionUrl` setting in the plugin's Config tab in Orca (default
-`https://app.takumion.com/`).
+`https://app.takumion.com/`). When a local Takumion dev server answers on
+`localhost:5174` or `localhost:5180`, the tab offers it as one more *In this
+tab* button; nothing else changes for users without one.
 
 ### STL by default; 3MF needs one Orca setting
 

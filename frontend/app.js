@@ -7,6 +7,7 @@
   const $ = (id) => document.getElementById(id);
   let codeTimer = null;
   let latest = null;
+  let devProbed = false;
 
   function post(action, extra) {
     if (window.orca && window.orca.postMessage) window.orca.postMessage(Object.assign({type: "tab", action}, extra || {}));
@@ -88,8 +89,25 @@
     }
   }
 
+  // A local Takumion dev server answers on its port: offer it "in this tab" too.
+  // no-cors: only "something answered" matters, not what.
+  function probeDev(targets) {
+    if (devProbed) return;
+    devProbed = true;
+    for (const target of targets || []) {
+      const stop = new AbortController();
+      setTimeout(() => stop.abort(), 1500);
+      fetch(target.probe, {mode: "no-cors", signal: stop.signal}).then(() => {
+        const button = el("button", "secondary", `In this tab (${target.label})`);
+        button.addEventListener("click", () => location.assign(target.url));
+        $("open-dev").append(button);
+      }, () => {});
+    }
+  }
+
   function render(state) {
     latest = state;
+    probeDev(state.takumionDev);
     renderStatus(state);
     renderCode(state.code);
     renderPairings(state.pairings || []);
