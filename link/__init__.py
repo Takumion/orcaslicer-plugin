@@ -5,4 +5,4 @@ protocol in ``docs/slicer-link-protocol.md`` and get files onto Orca's plate
 through Orca's own single-instance path.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

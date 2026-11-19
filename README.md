@@ -18,9 +18,11 @@ loopback protocol: [`docs/slicer-link-protocol.md`](docs/slicer-link-protocol.md
 
 ## Install
 
-1. Download `takumion_link_any.py` from the releases (or build it, below).
+1. Subscribe to **Takumion Link** in Orca Cloud's Plugin Hub, or download
+   `takumion_link-<version>-py3-none-any.whl` from the releases (or build it, below).
 2. In OrcaSlicer: install it as a local plugin from the Plugins dialog.
-   Orca keeps it at `{data_dir}/orca_plugins/takumion_link_any.py/`.
+   Orca keeps it under `{data_dir}/orca_plugins/`. The single-file
+   `takumion_link_any.py` still builds (below) and installs the same way.
 3. On first load Orca asks once for the plugin's permissions:
    - **listen on `127.0.0.1` ports 47390–47394** — the local link Takumion
      connects to (loopback only; nothing is reachable from the network);
@@ -128,7 +130,8 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 uv sync                      # pytest into .venv
 uv run pytest                # the suite, with our own fake `orca` module
 uv run python dev/serve.py   # the tab in a browser at http://127.0.0.1:8766/
-uv run python packaging/bundle.py   # dist/takumion_link_any.py (size-checked, < 1 MB)
+uv run python packaging/build_wheel.py  # dist/takumion_link-<version>-py3-none-any.whl (what releases ship)
+uv run python packaging/bundle.py       # dist/takumion_link_any.py (one file, size-checked, < 1 MB)
 ```
 
 `dev/serve.py` runs the real link server on the first free protocol port

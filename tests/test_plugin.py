@@ -2,11 +2,13 @@
 as a module from its installed path, with our fake ``orca`` importable."""
 
 import functools
+import importlib
 import importlib.util
 import json
 import re
 import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,7 @@ from link.protocol import PORTS
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "packaging"))
 import bundle  # noqa: E402
+import build_wheel  # noqa: E402
 
 
 def install(source: Path, data_dir: Path) -> Path:
@@ -37,16 +40,32 @@ def load(path: Path, monkeypatch, orca):
     return module
 
 
-@pytest.fixture(params=["source", "bundle"])
+def load_wheel(whl: Path, data_dir: Path, monkeypatch, orca):
+    """Install and import a wheel the way Orca does: extracted to
+    ``orca_plugins/<file>/__whl_extracted__/<package>/``, that folder on
+    ``sys.path``, then the package ``Import-Name`` names."""
+    extracted = install(whl, data_dir).parent / "__whl_extracted__" / "takumion_link"
+    with zipfile.ZipFile(whl) as archive:
+        meta = next(n for n in archive.namelist() if n.endswith(".dist-info/METADATA"))
+        assert "Import-Name: takumion_link" in archive.read(meta).decode()
+        archive.extractall(extracted)
+    monkeypatch.setitem(sys.modules, "orca", orca)
+    monkeypatch.syspath_prepend(str(extracted))
+    for name in [n for n in sys.modules if n == "takumion_link" or n.startswith("takumion_link.")]:
+        monkeypatch.delitem(sys.modules, name)
+    return importlib.import_module("takumion_link")
+
+
+@pytest.fixture(params=["source", "bundle", "wheel"])
 def plugin(request, tmp_path, monkeypatch):
-    """The plugin loaded from source (repo on sys.path) or from the bundle."""
+    """The plugin loaded from source (repo on sys.path), the bundle, or the wheel."""
     data_dir = tmp_path / "OrcaSlicer"
-    if request.param == "source":
-        path = install(REPO / "takumion_link.py", data_dir)
-    else:
-        path = install(bundle.build(REPO, tmp_path / "dist" / "takumion_link_any.py"), data_dir)
     orca = make_fake_orca()
-    module = load(path, monkeypatch, orca)
+    if request.param == "wheel":
+        module = load_wheel(build_wheel.build(REPO, tmp_path / "dist"), data_dir, monkeypatch, orca)
+    else:
+        source = REPO / "takumion_link.py" if request.param == "source" else bundle.build(REPO, tmp_path / "dist" / "takumion_link_any.py")
+        module = load(install(source, data_dir), monkeypatch, orca)
     yield module, orca, data_dir
     for cls in orca.calls["capabilities"]:
         if getattr(cls, "_test_instance", None) and cls._test_instance.app:
@@ -128,3 +147,10 @@ def test_bundle_is_small_and_starts_with_the_manifest(tmp_path):
 def test_protocol_doc_is_present():
     doc = (REPO / "docs" / "slicer-link-protocol.md").read_text()
     assert doc.startswith("# Slicer link protocol — v1")
+
+
+def test_the_page_renders_from_where_it_is_installed(plugin):
+    """Source, bundle and wheel each find the frontend: the wheel keeps it two levels above ``page``."""
+    module, _orca, _data_dir = plugin
+    html = module.render_page()
+    assert "<html" in html.lower() and "<script" in html.lower()
