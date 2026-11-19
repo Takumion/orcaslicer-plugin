@@ -6,7 +6,7 @@
 # name = "Takumion Link"
 # description = "Send bodies from Takumion to the plate over a local link; Update keeps them linked for Reload from disk, Add puts a new copy."
 # author = "Takumion"
-# version = "0.1.2"
+# version = "0.1.3"
 # ///
 # SPDX-License-Identifier: AGPL-3.0-only
 """Takumion Link for OrcaSlicer 2.5+.
