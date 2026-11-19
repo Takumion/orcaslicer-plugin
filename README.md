@@ -141,6 +141,19 @@ against a simulated plate, so Takumion can pair with and send to it without
 Orca (`--orca dialog` simulates the 3MF question, `--orca project` a 3MF
 opened as the project).
 
+## Release
+
+1. Bump the version in `pyproject.toml`, `link/__init__.py`, the manifest at the
+   top of `takumion_link.py` and `uv.lock`.
+2. Commit, push, and publish a GitHub release tagged `vX.Y.Z` (the same version),
+   its notes being what changed.
+3. `.github/workflows/publish-orcacloud.yml` takes it from there: it tests, builds
+   the wheel and `takumion_link_any.py`, attaches both to the release, and
+   publishes the wheel as the new version of **Takumion Link** on Orca Cloud, the
+   release notes as its changelog. No secret is involved: Orca Cloud trusts this
+   repository's GitHub OIDC token (the listing's *Edit plugin › GitHub publishing*).
+   The tag must be higher than the version on Orca Cloud.
+
 ## Licence
 
 AGPL-3.0-only — see [`LICENSE`](LICENSE).
