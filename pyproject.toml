@@ -1,6 +1,6 @@
 [project]
 name = "takumion-orca-link"
-version = "0.1.1"
+version = "0.1.2"
 description = "Takumion Link: an OrcaSlicer 2.5+ plugin that puts bodies sent from Takumion on the plate."
 license = "AGPL-3.0-only"
 requires-python = ">=3.12"

@@ -16,6 +16,14 @@ The plugin adds a **Takumion** tab to Orca: link status, pairing, paired apps
 It contains no Takumion code. Takumion talks to it over a small documented
 loopback protocol: [`docs/slicer-link-protocol.md`](docs/slicer-link-protocol.md).
 
+> **Takumion is slower inside Orca's tab.** Orca's built-in web view draws at
+> about 30 fps and has no `SharedArrayBuffer`, so the geometry runs on one
+> thread. Sending works the same; for modelling, use Takumion in a browser or
+> the desktop app and send from there.
+
+> **Tested on Linux** (Flatpak and native). The Windows and macOS hand-offs
+> are written but not yet checked; see [How it works](#how-it-works).
+
 ## Install
 
 1. Subscribe to **Takumion Link** in Orca Cloud's Plugin Hub, or download
@@ -115,13 +123,12 @@ object with several parts).
 | Windows | `WM_COPYDATA` to Orca's main window | written, not yet checked |
 | macOS | distributed notification `OtherOrcaSlicerInstanceMessage<hash>` | written, not yet checked |
 
-Files live under Orca's data folder:
+The plugin's own bookkeeping lives under Orca's data folder; the body files
+go to the folder in [Where the files go](#where-the-files-go):
 
 ```
-takumion/
-  pairings.json   links.json   state.json
-  links/<docKey>/<bodyKey>/<name>.<fmt>
-  copies/<docKey>/<name>-<YYYYMMDD-HHMMSS>.<fmt>
+{data_dir}/takumion/
+  pairings.json   links.json   state.json   location.json
 ```
 
 ## Develop
