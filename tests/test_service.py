@@ -148,24 +148,25 @@ def test_links_and_docs(world):
         world.service.links(None)
 
 
-def test_no_folder_yet_refuses_the_send_and_says_where_to_set_it(world):
+def test_a_missing_folder_is_created_at_the_first_send_and_a_newer_choice_waits_for_a_restart(world):
     from link.protocol import LinkError
 
-    world.location.active = world.location.saved = None
-    try:
-        send(world)
-    except LinkError as error:
-        assert error.code == "setup-needed" and "Open Takumion Link" in error.message
-    else:
-        raise AssertionError("a send with no folder must be refused")
-    assert world.orca.delivered == [] and "choose where" in world.notes.items[-1][1].lower()
+    world.location.active = world.location.saved = world.files / "Documents" / "Takumion"
+    assert not world.location.active.exists()
+    send(world)
+    assert world.location.active.is_dir() and any(world.location.active.iterdir()), "the default folder needs no setup"
     world.location.saved = world.files / "elsewhere"
+    assert world.service.hello(False).get("files") is None, "an unpaired caller never sees the folder (it names the user)"
+    assert world.service.hello(True)["files"] == {"folder": str(world.location.active), "ready": True, "needsRestart": True}
+    blocked = world.files / "a-file"
+    blocked.write_text("x")
+    world.location.active = blocked / "Takumion"
     try:
         send(world)
     except LinkError as error:
-        assert error.code == "setup-needed" and "Restart OrcaSlicer" in error.message
-    assert world.service.hello(False).get("files") is None, "an unpaired caller never sees the folder (it names the user)"
-    assert world.service.hello(True)["files"] == {"folder": None, "ready": False, "needsRestart": True}
+        assert error.code == "setup-needed" and "cannot create" in error.message
+    else:
+        raise AssertionError("a folder that cannot be made must refuse the send")
 
 
 def test_a_body_linked_before_the_folder_changed_gets_a_file_in_the_new_folder(world, tmp_path):

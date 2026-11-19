@@ -27,7 +27,7 @@ from typing import Any
 from link.app import LinkApp
 from link.handoff_linux import touch_bus
 from link.launcher import WEB_URL
-from link.location import saved_folder
+from link.location import folder_at_load
 from link.orca_host import OrcaNotifier, data_dir_for, event_name, orca_version, refresh_plate
 from link.page import render_page
 from link.protocol import LOOPBACK, PORTS
@@ -74,9 +74,12 @@ if orca is not None and hasattr(orca, "pages"):
             return ""
 
         def get_default_config(self) -> dict[str, str]:
-            """Orca's Config tab: which Takumion *Open Takumion* opens, and
-            whether the tab opens it by itself ("false" keeps the plugin's page)."""
-            return {"takumionUrl": WEB_URL, "openTakumionInTab": "true"}
+            """Orca's Config tab: which Takumion *Open Takumion* opens, whether
+            the tab opens it by itself ("false" keeps the plugin's page), and
+            ``filesFolder``, where Takumion's files go (the folder in use, by
+            default ``~/Documents/Takumion``; another one is used after a restart)."""
+            return {"takumionUrl": WEB_URL, "openTakumionInTab": "true",
+                    "filesFolder": str(folder_at_load(data_dir_for(__file__)))}
 
         def _config(self) -> dict[str, Any]:
             try:
@@ -96,6 +99,7 @@ if orca is not None and hasattr(orca, "pages"):
                 self.app = LinkApp(data_dir_for(__file__), notifier=OrcaNotifier(orca, log),
                                    post=self.post_message, web_url=self._takumion_url(), log=log,
                                    panel_host=self._panel_host())
+                self._follow_config_folder()
                 self.app.start()
             except Exception:  # noqa: BLE001 - never take Orca down
                 log("load failed:\n" + traceback.format_exc())
@@ -167,6 +171,23 @@ if orca is not None and hasattr(orca, "pages"):
             except Exception:  # noqa: BLE001
                 log(f"plate refresh after {event} failed:\n" + traceback.format_exc())
 
+        def _follow_config_folder(self) -> None:
+            """``filesFolder`` from the Config tab, when edited there, becomes the
+            chosen folder; a folder chosen on the plugin's page is written back
+            to the Config tab, so both always name the same one."""
+            location = self.app.location
+            try:
+                location.apply(self._config().get("filesFolder"))
+            except (ValueError, OSError) as exc:
+                log(f"filesFolder in the Config tab is not used: {exc}")
+            location.on_choose = self._save_config_folder
+
+        def _save_config_folder(self, folder: Any) -> None:
+            try:
+                self.save_config(json.dumps({**self._config(), "filesFolder": str(folder)}))
+            except Exception:  # noqa: BLE001 - the page's choice stands without it
+                log("could not write filesFolder to the Config tab:\n" + traceback.format_exc())
+
         def _touch_bus_once(self) -> None:
             """UI thread, Linux: let Orca ask about the session bus inline, once."""
             if self.bus_touched or not sys.platform.startswith("linux"):
@@ -182,7 +203,7 @@ if orca is not None and hasattr(orca, "pages"):
         """The plugin package: asks for its permissions and registers the tab."""
 
         def register_capabilities(self) -> None:
-            orca.request_permissions(**permissions(saved_folder(data_dir_for(__file__))))
+            orca.request_permissions(**permissions(folder_at_load(data_dir_for(__file__))))
             orca.register_capability(TakumionTab)
 
 elif orca is not None:

@@ -65,10 +65,12 @@ system's URL opener. The web address is the
 
 ### Where the files go
 
-The first time, choose a folder in the plugin's window (*Where Takumion keeps
-its files*, suggested `~/Documents/Takumion`). Sends wait until one is set.
-OrcaSlicer lets a plugin write to a folder only when it allows it at start-up,
-so after saving, **restart OrcaSlicer once** and allow the folder when it asks.
+Files go to `~/Documents/Takumion` unless you choose another folder: in the
+plugin's window (*Where Takumion keeps its files*) or as `filesFolder` in the
+plugin's Config tab (Plugins › Takumion Link › Config); both show the folder in
+use. OrcaSlicer lets a plugin write to a folder only when it allows it at
+start-up, so after choosing another one, **restart OrcaSlicer once** and allow
+the folder when it asks.
 Files sit flat in that folder, named `Project - Body.stl` (Update) and
 `Project - Body 2026-11-15 105030.stl` (Add copy), with the project itself
 beside them as `Project.cad` (open it in Takumion with File › Open).

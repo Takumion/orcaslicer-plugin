@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from link.atomic import write_bytes_atomic
-from link.location import FilesLocation, normalize_folder, saved_folder, suggestions
+from link.location import FilesLocation, default_folder, folder_at_load, normalize_folder, saved_folder, suggestions
 
 
 def test_the_typed_folder_becomes_an_absolute_path_or_a_message(tmp_path):
@@ -22,13 +22,36 @@ def test_the_typed_folder_becomes_an_absolute_path_or_a_message(tmp_path):
         normalize_folder(home / "file.txt", home)
 
 
+def test_the_default_folder_is_in_use_until_another_is_chosen(tmp_path):
+    data, home = tmp_path / "data", tmp_path / "home"
+    location = FilesLocation(data, home)
+    assert location.active == location.saved == default_folder(home) == home / "Documents" / "Takumion"
+    assert not location.needs_restart and folder_at_load(data, home) == default_folder(home)
+    assert not location.active.exists(), "made at the first send, not at load (Orca asks about it)"
+    assert location.ensure_active().is_dir()
+
+
+def test_a_folder_from_the_config_tab_is_chosen_and_every_choice_is_heard(tmp_path):
+    data, home = tmp_path / "data", tmp_path / "home"
+    location = FilesLocation(data, home)
+    heard = []
+    location.on_choose = heard.append
+    location.apply(None)
+    location.apply(str(default_folder(home)))
+    assert heard == [] and saved_folder(data) is None, "the folder already in use is not chosen again"
+    location.apply("~/Prints")
+    assert heard == [home / "Prints"] and saved_folder(data) == home / "Prints" and location.needs_restart
+    with pytest.raises(ValueError):
+        location.apply("relative/dir")
+
+
 def test_a_saved_folder_is_used_from_the_next_start(tmp_path):
     data, home = tmp_path / "data", tmp_path / "home"
     location = FilesLocation(data, home)
-    assert location.active is None and location.state()["suggestions"] == suggestions(home)
-    folder = location.choose("~/Documents/Takumion")
+    assert location.state()["suggestions"] == suggestions(home)
+    folder = location.choose("~/Desktop/Takumion")
     assert folder.is_dir(), "a missing folder is created once, when saved"
-    assert location.active is None and location.needs_restart, "Orca allows a folder only at load"
+    assert location.active == default_folder(home) and location.needs_restart, "Orca allows a folder only at load"
     assert saved_folder(data) == folder
     again = FilesLocation(data, home)
     assert again.active == folder and not again.needs_restart, "after a restart it is the folder in use"
@@ -66,3 +89,22 @@ def test_writing_into_an_existing_folder_creates_no_folder_and_no_temp_via_mkste
         recording[0] = False
     assert seen == [] and (folder / "Bracket - Base.stl").read_bytes() == b"v2"
     assert [p.name for p in folder.iterdir()] == ["Bracket - Base.stl"], "no temp file left behind"
+
+
+def test_the_folder_in_use_is_not_made_again_when_it_exists(tmp_path):
+    """``mkdir`` on an existing folder still raises the audit event Orca asks about."""
+    location = FilesLocation(tmp_path / "data", tmp_path / "home")
+    location.ensure_active()
+    seen = []
+    recording = [True]
+
+    def hook(event, args):
+        if recording[0] and event == "os.mkdir":
+            seen.append(args[0])
+
+    sys.addaudithook(hook)
+    try:
+        location.ensure_active()
+    finally:
+        recording[0] = False
+    assert seen == []

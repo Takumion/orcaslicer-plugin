@@ -21,8 +21,6 @@ from .protocol import APP, HANDOFF_WAIT_S, PROTOCOL, LinkError, Part, SendReques
 from .store import Link, LinkStore
 
 PROJECT_GRACE_S = 0.75
-SETUP_FOLDER = ("Choose where Takumion keeps its files first: open Takumion Link in OrcaSlicer "
-                "(in Takumion: Settings › Slicer › Open Takumion Link) and pick a folder.")
 SETUP_HINT = "Set Preferences › Load behavior to \"Load geometry only\", so a 3MF from Takumion is added to the plate."
 
 
@@ -117,7 +115,7 @@ class LinkService:
         }
         if paired:
             active = self.location.active
-            answer["files"] = {"folder": str(active) if active else None, "ready": active is not None,
+            answer["files"] = {"folder": str(active), "ready": True,
                                "needsRestart": self.location.needs_restart}
         return answer
 
@@ -140,13 +138,12 @@ class LinkService:
     def send(self, request: SendRequest) -> dict[str, Any]:
         """``POST /v1/send``: write every part, hand the new ones to Orca one
         file per message, then wait (shared 5 s) to see them arrive."""
-        folder = self.location.active
-        if folder is None:
-            restart = self.location.needs_restart
-            message = (f"Restart OrcaSlicer to start using {self.location.saved} for Takumion's files "
-                       "(OrcaSlicer asks once to allow it)." if restart else SETUP_FOLDER)
+        try:
+            folder = self.location.ensure_active()
+        except OSError as exc:
+            message = f"Takumion cannot create {self.location.active} for its files: {exc}. Choose another folder in Takumion Link."
             self._notifier.notify("warning", f"Takumion: {message}")
-            raise LinkError("setup-needed", message)
+            raise LinkError("setup-needed", message) from exc
         with self._send_lock:
             handed: list[_Handed] = []
             results: dict[str, dict[str, Any]] = {}
@@ -298,7 +295,7 @@ class LinkService:
     def _is_link_file(self, path: str) -> bool:
         """Whether ``path`` is a file this plugin wrote (the chosen folder, or the old data-folder layout)."""
         folder = self.location.active
-        return _inside(path, self.store.root) or (folder is not None and _inside(path, folder))
+        return _inside(path, self.store.root) or _inside(path, folder)
 
 
 def _failed(part: Part, message: str) -> dict[str, Any]:

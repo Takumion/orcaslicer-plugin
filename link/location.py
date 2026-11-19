@@ -1,5 +1,6 @@
-"""Where Takumion's mesh files go: a folder the user chooses once, in the
-plugin's page (docs/slicer-link-protocol.md, "Files on disk").
+"""Where Takumion's mesh files go: ``~/Documents/Takumion`` until the user
+chooses another folder, in the plugin's page or as ``filesFolder`` in Orca's
+Config tab (docs/slicer-link-protocol.md, "Files on disk").
 
 OrcaSlicer's sandbox decides how this works:
 
@@ -8,7 +9,8 @@ OrcaSlicer's sandbox decides how this works:
   one saved when Orca started; a newly chosen one is used after a restart.
 - Creating a folder outside Orca's data folder asks the user every time and is
   never remembered, so the plugin creates the chosen folder once, when it is
-  saved, and never makes subfolders in it (flat file names, see ``LinkStore``).
+  saved (the default one at the first send), and never makes subfolders in it
+  (flat file names, see ``LinkStore``).
 
 The choice is kept in ``takumion/location.json`` in Orca's data folder.
 """
@@ -17,6 +19,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from .atomic import read_json, write_json_atomic
@@ -39,9 +42,19 @@ def saved_folder(data_dir: Path) -> Path | None:
     return Path(folder) if isinstance(folder, str) and os.path.isabs(folder) else None
 
 
+def default_folder(home: Path) -> Path:
+    """The folder used until the user chooses one."""
+    return home / "Documents" / "Takumion"
+
+
+def folder_at_load(data_dir: Path, home: Path | None = None) -> Path:
+    """The folder in use from this start: the chosen one, else the default."""
+    return saved_folder(data_dir) or default_folder(home or Path.home())
+
+
 def suggestions(home: Path) -> list[str]:
     """Folders offered next to the field, most likely first."""
-    return [str(home / "Documents" / "Takumion"), str(home / "Desktop" / "Takumion"), str(home / "Takumion")]
+    return [str(default_folder(home)), str(home / "Desktop" / "Takumion"), str(home / "Takumion")]
 
 
 def normalize_folder(raw: object, home: Path) -> Path:
@@ -67,19 +80,21 @@ def normalize_folder(raw: object, home: Path) -> Path:
 
 
 class FilesLocation:
-    """The chosen folder: ``active`` (allowed when Orca started, used now)
-    and ``saved`` (the latest choice, used from the next start)."""
+    """The folder: ``active`` (allowed when Orca started, used now) and
+    ``saved`` (the latest choice, used from the next start). ``on_choose``
+    hears every saved choice (the plugin keeps Orca's Config tab level with it)."""
 
     def __init__(self, data_dir: Path, home: Path | None = None) -> None:
         self._data_dir = data_dir
         self._home = home or Path.home()
-        self.active: Path | None = saved_folder(data_dir)
-        self.saved: Path | None = self.active
+        self.active: Path = folder_at_load(data_dir, self._home)
+        self.saved: Path = self.active
+        self.on_choose: Callable[[Path], None] | None = None
 
     @property
     def needs_restart(self) -> bool:
         """A folder was chosen that Orca has not allowed yet."""
-        return self.saved is not None and self.saved != self.active
+        return self.saved != self.active
 
     def choose(self, raw: object) -> Path:
         """Save the user's folder (creating it once if missing: Orca asks
@@ -89,13 +104,27 @@ class FilesLocation:
             folder.mkdir(parents=True)
         write_json_atomic(location_file(self._data_dir), {"folder": str(folder)})
         self.saved = folder
+        if self.on_choose is not None:
+            self.on_choose(folder)
         return folder
+
+    def apply(self, raw: object) -> None:
+        """A folder from Orca's Config tab: chosen when it names another one."""
+        if raw and normalize_folder(raw, self._home) != self.saved:
+            self.choose(raw)
+
+    def ensure_active(self) -> Path:
+        """The folder in use, created if missing (the default one, at the first send).
+        Checked first: ``mkdir`` on an existing folder still makes Orca ask."""
+        if not self.active.is_dir():
+            self.active.mkdir(parents=True)
+        return self.active
 
     def state(self) -> dict[str, Any]:
         """What the plugin's page shows about the folder."""
         return {
-            "active": str(self.active) if self.active else None,
-            "saved": str(self.saved) if self.saved else None,
+            "active": str(self.active),
+            "saved": str(self.saved),
             "needsRestart": self.needs_restart,
             "suggestions": suggestions(self._home),
         }

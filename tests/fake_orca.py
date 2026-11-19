@@ -4,6 +4,7 @@ the plugin touches, recording what it was asked to do."""
 from __future__ import annotations
 
 import enum
+import json
 import types
 from dataclasses import dataclass, field
 from typing import Any
@@ -87,6 +88,12 @@ def make_fake_orca(version: str = "2.5.1") -> types.ModuleType:
 
         def get_config(self) -> str:
             return orca.config
+
+        def save_config(self, config: str) -> bool:
+            """Orca's binding takes a JSON string and keeps it as the stored config."""
+            json.loads(config)
+            orca.config = config
+            return True
 
     class base:  # noqa: N801 - Orca's name
         def register_capabilities(self) -> None:

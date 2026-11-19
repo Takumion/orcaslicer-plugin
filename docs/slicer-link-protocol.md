@@ -86,9 +86,9 @@ All bodies are JSON, UTF-8. Mesh bytes travel as standard base64.
 - `paired` is `true` when the request carries a valid token for its origin.
 - `files` — where the plugin writes Takumion's files — is present **only when
   `paired` is `true`** (and always over the bridge): the folder path names the
-  computer's user. `ready` is `false` until a folder is in use; `needsRestart`
-  is `true` when a newly chosen folder waits for Orca's next start. A client
-  warns before sending while `ready` is `false` (see *Files on disk*).
+  computer's user. `ready` is `true` (a folder is always in use: the default
+  `~/Documents/Takumion` until another is chosen); `needsRestart` is `true` when
+  a newly chosen folder waits for Orca's next start (see *Files on disk*).
 - `setup.loadGeometryOnly` is `"unknown"` until the plugin has seen a 3MF land
   as plain geometry (then `"confirmed"`) or open the dialog / the project
   (then `"missing"`). See [3MF](#3mf-and-orcas-load-behavior).
@@ -184,7 +184,7 @@ Revokes the caller's own token. → `204`.
 | 400 | `bad-request` | Malformed JSON, bad key, unknown `mode`/`format`, empty `parts` |
 | 401 | `unauthorized` | No token, or not valid for this origin |
 | 403 | `forbidden` | Wrong or expired pairing code |
-| 409 | `setup-needed` | No folder for Takumion's files is in use yet (or one waits for Orca's restart); `message` says what to do |
+| 409 | `setup-needed` | The folder for Takumion's files cannot be created; `message` says what to do |
 | 413 | `too-large` | Body over the limit |
 | 421 | `bad-host` | `Host` is not loopback |
 | 503 | `orca-busy` | Orca is starting or the hand-off target is not ready; retry |
@@ -276,15 +276,17 @@ STL never meets the dialog.
 
 ## Files on disk
 
-The meshes go into **one folder the user chooses** in the plugin's page (*Where
-Takumion keeps its files*; suggested `~/Documents/Takumion`). Until one is in
-use, `send` is refused with `setup-needed`. Orca's sandbox shapes the rest:
+The meshes go into **one folder**: `~/Documents/Takumion` by default, or the one
+the user chooses in the plugin's page (*Where Takumion keeps its files*) or as
+`filesFolder` in Orca's Config tab for the plugin. Both name the same folder: a
+choice on the page is written to the Config tab, and a folder typed there is
+chosen at the plugin's next load. Orca's sandbox shapes the rest:
 
 - A plugin may ask for a whole folder only while Orca loads it, so a newly
   chosen folder is used from Orca's **next start** (Orca asks once to allow it).
 - Orca asks about every folder a plugin creates outside its data folder and never
   remembers the answer, so the plugin creates the chosen folder once, when it is
-  saved, and keeps the files in it **flat**:
+  saved (the default one at the first send), and keeps the files in it **flat**:
 
 ```
 <folder>/
@@ -303,7 +305,7 @@ new folder at its next Update. The bookkeeping stays in Orca's data directory:
 takumion/
   pairings.json      token hashes, origins, times
   links.json         doc → body → path, format, lastSent
-  location.json      the chosen folder
+  location.json      the chosen folder (none: the default)
 ```
 
 ## Versioning

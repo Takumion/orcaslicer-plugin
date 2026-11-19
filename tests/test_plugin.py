@@ -154,3 +154,21 @@ def test_the_page_renders_from_where_it_is_installed(plugin):
     module, _orca, _data_dir = plugin
     html = module.render_page()
     assert "<html" in html.lower() and "<script" in html.lower()
+
+
+def test_files_folder_in_the_config_tab_and_the_page_name_the_same_folder(plugin, monkeypatch, tmp_path):
+    """The Config tab shows ``filesFolder`` (the default ~/Documents/Takumion); a folder
+    typed there is chosen at load, and a folder chosen on the page is written back."""
+    module, orca, data_dir = plugin
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(module, "LinkApp", functools.partial(module.LinkApp, ports=free_ports(1)))
+    tab = start_tab(orca, monkeypatch, data_dir)
+    assert tab.get_default_config()["filesFolder"] == str(home / "Documents" / "Takumion")
+    orca.config = json.dumps({"filesFolder": str(tmp_path / "Prints")})
+    tab.on_load()
+    location = tab.app.location
+    assert location.saved == tmp_path / "Prints" and location.needs_restart
+    location.choose(str(tmp_path / "Other"))
+    assert json.loads(orca.config)["filesFolder"] == str(tmp_path / "Other")
+    assert tab.get_default_config()["filesFolder"] == str(tmp_path / "Other"), "the Config tab shows the chosen one"
